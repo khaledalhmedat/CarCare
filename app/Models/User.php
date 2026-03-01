@@ -27,6 +27,7 @@ class User extends Authenticatable
         'remember_token'
     ];
 
+
     protected static function booted()
     {
         static::creating(fn($user) => $user->uuid = Str::uuid());
