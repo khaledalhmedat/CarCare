@@ -8,6 +8,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Support\Str;
 
+
 class User extends Authenticatable
 {
     use HasApiTokens, Notifiable, SoftDeletes;
@@ -82,5 +83,31 @@ class User extends Authenticatable
     public function scopeForTenant($query, $tenantId)
     {
         return $query->where('tenant_id', $tenantId);
+    }
+
+
+    public function store()
+    {
+        return $this->hasOne(Store::class);
+    }
+
+    public function technician()
+    {
+        return $this->hasOne(Technician::class);
+    }
+
+    public function carWasher()
+    {
+        return $this->hasOne(CarWasher::class);
+    }
+
+    public function isStoreOwner(): bool
+    {
+        return $this->hasRole('owner') && $this->store()->exists();
+    }
+
+    public function isTechnician(): bool
+    {
+        return $this->hasRole('technician') && $this->technician()->exists();
     }
 }

@@ -15,14 +15,18 @@ class Vehicle extends Model
         'model',
         'year',
         'plate_number',
-        'current_km'
+        'current_km',
+        'status'
     ];
-
-    /* ================= Relations ================= */
 
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function maintenanceRecords()
+    {
+        return $this->hasMany(MaintenanceRecord::class);
     }
 
     public function fuelLogs()
@@ -35,17 +39,12 @@ class Vehicle extends Model
         return $this->hasMany(MaintenanceAlert::class);
     }
 
-    public function maintenanceRecords()
-    {
-        return $this->hasMany(MaintenanceRecord::class);
-    }
-
-    /* ================= Helpers ================= */
-
     public function needsMaintenance(): bool
     {
         return $this->maintenanceAlerts()
             ->where('is_active', true)
             ->exists();
     }
+
+    
 }
