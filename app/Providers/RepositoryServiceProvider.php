@@ -8,7 +8,10 @@ use App\Repositories\Contracts\UserRepositoryInterface;
 use App\Repositories\Implementation\AuthRepository;
 use App\Repositories\Implementation\UserRepository;
 use App\Repositories\Contracts\VehicleRepositoryInterface;
+use App\Repositories\Contracts\MaintenanceRequestRepositoryInterface;
+use App\Repositories\Implementation\MaintenanceRequestRepository;
 use App\Repositories\Implementation\VehicleRepository;
+use App\Services\MaintenanceRequestService;
 use App\Services\VehicleService;
 
 
@@ -33,6 +36,17 @@ class RepositoryServiceProvider extends ServiceProvider
         $this->app->singleton(VehicleService::class, function ($app) {
             return new VehicleService(
                 $app->make(VehicleRepositoryInterface::class)
+            );
+        });
+
+         $this->app->bind(
+            MaintenanceRequestRepositoryInterface::class,
+            MaintenanceRequestRepository::class
+        );
+        
+        $this->app->singleton(MaintenanceRequestService::class, function ($app) {
+            return new MaintenanceRequestService(
+                $app->make(MaintenanceRequestRepositoryInterface::class)
             );
         });
     }

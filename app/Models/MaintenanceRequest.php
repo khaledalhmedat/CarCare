@@ -11,11 +11,15 @@ class MaintenanceRequest extends Model
     const STATUS_COMPLETED = 'completed';
 
     protected $fillable = [
-        'user_id',
-        'vehicle_id',
-        'description',
-        'status'
-    ];
+    'user_id',
+    'vehicle_id',
+    'description',
+    'priority',      
+    'preferred_date',  
+    'status',
+    'cancellation_reason',
+    'cancelled_at',
+];
 
     /* ================= Relations ================= */
 
