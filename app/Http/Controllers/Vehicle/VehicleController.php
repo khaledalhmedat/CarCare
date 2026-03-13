@@ -40,25 +40,32 @@ class VehicleController extends Controller
 
     //اضافة مركبة
     public function store(StoreVehicleRequest $request): JsonResponse
-    {
-        try {
-            $vehicle = $this->vehicleService->createVehicle(
-                $request->user(),
-                $request->validated()
-            );
-
-            return response()->json([
-                'success' => true,
-                'message' => 'تم إضافة المركبة بنجاح',
-                'data' => new VehicleResource($vehicle)
-            ], 201);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 500);
+{
+    try {
+        $data = $request->validated();
+        
+        if ($request->hasFile('image')) {
+            $data['image'] = $request->file('image');
         }
+        
+        $vehicle = $this->vehicleService->createVehicle(
+            $request->user(),
+            $data
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم إضافة المركبة بنجاح',
+            'data' => new VehicleResource($vehicle)
+        ], 201);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'حدث خطأ: ' . $e->getMessage()
+        ], 500);
     }
+}
 
     //عرض مركبة محددة
     public function show(Request $request, int $id): JsonResponse 
@@ -79,27 +86,34 @@ class VehicleController extends Controller
     }
 
     //تحديث مركبة
-    public function update(UpdateVehicleRequest $request, int $id): JsonResponse
-    {
-        try {
-            $vehicle = $this->vehicleService->updateVehicle(
-                $id,
-                $request->user(),
-                $request->validated()
-            );
-
-            return response()->json([
-                'success' => true,
-                'message' => 'تم تحديث المركبة بنجاح',
-                'data' => new VehicleResource($vehicle)
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 404);
+   public function update(UpdateVehicleRequest $request, int $id): JsonResponse
+{
+    try {
+        $data = $request->validated();
+        
+        if ($request->hasFile('image')) {
+            $data['image'] = $request->file('image');
         }
+        
+        $vehicle = $this->vehicleService->updateVehicle(
+            $id,
+            $request->user(),
+            $data
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم تحديث المركبة بنجاح',
+            'data' => new VehicleResource($vehicle)
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage()
+        ], 400);
     }
+}
 
     //حذف مركبة
     public function destroy(Request $request, int $id): JsonResponse

@@ -28,6 +28,12 @@ class User extends Authenticatable
         'remember_token'
     ];
 
+     public function assignRole($role)
+    {
+        $this->roles()->sync([$role]);
+    }
+
+    
 
     protected static function booted()
     {

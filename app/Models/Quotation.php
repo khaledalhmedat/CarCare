@@ -6,16 +6,21 @@ use Illuminate\Database\Eloquent\Model;
 
 class Quotation extends Model
 {
-    const STATUS_PENDING  = 'pending';
-    const STATUS_ACCEPTED = 'accepted';
-    const STATUS_REJECTED = 'rejected';
-
     protected $fillable = [
         'maintenance_request_id',
         'technician_id',
         'price',
+        'estimated_days',  
         'notes',
-        'status'
+        'parts_included',    
+        'status',
+        'completed_at',        
+    ];
+
+    protected $casts = [
+        'parts_included' => 'boolean',
+        'completed_at' => 'datetime',
+        'estimated_days' => 'integer',
     ];
 
     public function maintenanceRequest()
@@ -27,5 +32,9 @@ class Quotation extends Model
     {
         return $this->belongsTo(User::class, 'technician_id');
     }
-}
 
+    public function technicianProfile()
+    {
+        return $this->belongsTo(Technician::class, 'technician_id', 'user_id');
+    }
+}

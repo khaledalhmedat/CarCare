@@ -25,6 +25,8 @@ class UpdateVehicleRequest extends FormRequest
                 Rule::unique('vehicles')->ignore($this->route('vehicle'))
             ],
             'current_km' => ['nullable', 'integer', 'min:0'],
+            'image' => ['nullable', 'image', 'mimes:jpeg,png,jpg', 'max:2048'],
+
         ];
     }
 

@@ -19,6 +19,8 @@ class StoreVehicleRequest extends FormRequest
             'year' => ['required', 'integer', 'min:1900', 'max:' . (date('Y') + 1)],
             'plate_number' => ['required', 'string', 'max:20', 'unique:vehicles'],
             'current_km' => ['nullable', 'integer', 'min:0'],
+            'image' => ['nullable', 'image', 'mimes:jpeg,png,jpg', 'max:2048'],
+
         ];
     }
 
@@ -32,6 +34,9 @@ class StoreVehicleRequest extends FormRequest
             'year.max' => 'سنة الصنع غير صحيحة',
             'plate_number.required' => 'رقم اللوحة مطلوب',
             'plate_number.unique' => 'رقم اللوحة مستخدم بالفعل',
+            'image.image' => 'الملف يجب أن يكون صورة',
+            'image.mimes' => 'الصورة يجب أن تكون jpeg, png, jpg',
+            'image.max' => 'حجم الصورة لا يتجاوز 2 ميجابايت',
         ];
     }
 }

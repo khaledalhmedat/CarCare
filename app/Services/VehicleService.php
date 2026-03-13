@@ -6,6 +6,10 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Repositories\Contracts\VehicleRepositoryInterface;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
+
+
 
 class VehicleService
 {
@@ -36,35 +40,99 @@ class VehicleService
     }
 
     
+   /**
+     * رفع صورة المركبة
+     */
+    private function uploadImage($image, ?Vehicle $vehicle = null): ?string
+    {
+        if (!$image) {
+            return null;
+        }
+
+        // إذا كان في صورة قديمة، احذفها
+        if ($vehicle && $vehicle->image) {
+            Storage::disk('public')->delete($vehicle->image);
+        }
+
+        // رفع الصورة الجديدة
+        $path = $image->store('vehicles', 'public');
+        return $path;
+    }
+
+    /**
+     * إضافة مركبة جديدة
+     */
     public function createVehicle(User $user, array $data): Vehicle
     {
-        return $this->vehicleRepository->createForUser($user, $data);
+        try {
+            DB::beginTransaction();
+
+            // رفع الصورة إذا وجدت
+            if (isset($data['image'])) {
+                $data['image'] = $this->uploadImage($data['image']);
+            }
+
+            $vehicle = $this->vehicleRepository->createForUser($user, $data);
+
+            DB::commit();
+            return $vehicle;
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
+        }
     }
 
-    
+    /**
+     * تحديث بيانات مركبة
+     */
     public function updateVehicle(int $id, User $user, array $data): Vehicle
     {
-        $vehicle = $this->vehicleRepository->find($id);
-        
-        if (!$vehicle || $vehicle->user_id !== $user->id) {
-            throw new \Exception('المركبة غير موجودة أو لا تملك صلاحية تعديلها');
+        $vehicle = $this->getVehicle($id, $user);
+
+        try {
+            DB::beginTransaction();
+
+            // رفع الصورة الجديدة إذا وجدت
+            if (isset($data['image'])) {
+                $data['image'] = $this->uploadImage($data['image'], $vehicle);
+            }
+
+            $this->vehicleRepository->update($vehicle, $data);
+
+            DB::commit();
+            return $vehicle->fresh();
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
         }
-        
-        $this->vehicleRepository->update($vehicle, $data);
-        
-        return $vehicle->fresh();
     }
 
-    
+    /**
+     * حذف مركبة
+     */
     public function deleteVehicle(int $id, User $user): bool
     {
-        $vehicle = $this->vehicleRepository->find($id);
-        
-        if (!$vehicle || $vehicle->user_id !== $user->id) {
-            throw new \Exception('المركبة غير موجودة أو لا تملك صلاحية حذفها');
+        $vehicle = $this->getVehicle($id, $user);
+
+        try {
+            DB::beginTransaction();
+
+            // حذف الصورة إذا وجدت
+            if ($vehicle->image) {
+                Storage::disk('public')->delete($vehicle->image);
+            }
+
+            $this->vehicleRepository->delete($vehicle);
+
+            DB::commit();
+            return true;
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
         }
-        
-        return $this->vehicleRepository->delete($vehicle);
     }
 
     
