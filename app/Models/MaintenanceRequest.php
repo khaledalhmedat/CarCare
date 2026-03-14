@@ -6,22 +6,23 @@ use Illuminate\Database\Eloquent\Model;
 
 class MaintenanceRequest extends Model
 {
-    const STATUS_PENDING   = 'pending';
-    const STATUS_ASSIGNED  = 'assigned';
-    const STATUS_COMPLETED = 'completed';
-
     protected $fillable = [
-    'user_id',
-    'vehicle_id',
-    'description',
-    'priority',      
-    'preferred_date',  
-    'status',
-    'cancellation_reason',
-    'cancelled_at',
-];
+        'user_id',
+        'vehicle_id',
+        'description',
+        'priority',
+        'preferred_date',
+        'status',
+        'cancellation_reason',
+        'cancelled_at',
+        'accepted_quotation_id',
+    ];
 
-    /* ================= Relations ================= */
+    protected $casts = [
+        'preferred_date' => 'date',
+        'cancelled_at' => 'datetime',
+    ];
+
 
     public function user()
     {
@@ -48,10 +49,22 @@ class MaintenanceRequest extends Model
         return $this->hasOne(ServiceJob::class);
     }
 
-    /* ================= Helpers ================= */
 
-    public function isPending(): bool
+    public function maintenanceRecord()
     {
-        return $this->status === self::STATUS_PENDING;
+        return $this->hasOneThrough(
+            MaintenanceRecord::class,
+            ServiceJob::class,
+            'maintenance_request_id',
+            'service_job_id',
+            'id',
+            'id'
+        );
+    }
+
+
+    public function maintenanceRecordSimple()
+    {
+        return $this->hasOne(MaintenanceRecord::class, 'maintenance_request_id');
     }
 }

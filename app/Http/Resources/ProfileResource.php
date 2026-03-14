@@ -16,17 +16,17 @@ class ProfileResource extends JsonResource
             'phone' => $this->phone,
             'avatar' => $this->avatar ? asset('storage/' . $this->avatar) : null,
             'status' => $this->status,
-            
+
             'stats' => [
                 'total_vehicles' => $this->whenLoaded('vehicles', fn() => $this->vehicles->count(), 0),
                 'total_maintenance_requests' => $this->whenLoaded('maintenanceRequests', fn() => $this->maintenanceRequests->count(), 0),
                 'total_sos_requests' => $this->whenLoaded('sosRequests', fn() => $this->sosRequests->count(), 0),
             ],
-            
+
             'created_at' => $this->created_at->toDateTimeString(),
             'created_ago' => $this->created_at->diffForHumans(),
             'updated_at' => $this->updated_at->toDateTimeString(),
-            
+
             'profile_completed' => $this->isProfileCompleted(),
         ];
     }

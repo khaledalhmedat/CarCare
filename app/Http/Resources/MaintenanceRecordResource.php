@@ -10,12 +10,48 @@ class MaintenanceRecordResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'vehicle_id' => $this->vehicle_id,
-            'service_job_id' => $this->service_job_id,
             'details' => $this->details,
-            'cost' => $this->cost ?? 0,
-            'created_at' => $this->created_at->toDateTimeString(),
-            'created_ago' => $this->created_at->diffForHumans(),
+            'parts_used' => $this->parts_used,
+            'parts_used_text' => $this->formatPartsUsed(),
+            'completion_notes' => $this->completion_notes,
+            'recommendations' => $this->recommendations,
+
+            'completed_at' => $this->completed_at?->toDateTimeString(),
+            'completed_ago' => $this->completed_at?->diffForHumans(),
+
+            'vehicle' => [
+                'id' => $this->vehicle->id,
+                'brand' => $this->vehicle->brand,
+                'model' => $this->vehicle->model,
+                'plate_number' => $this->vehicle->plate_number,
+            ],
+
+            'technician' => $this->whenLoaded('serviceJob', function () {
+                return [
+                    'id' => $this->serviceJob->technician->id,
+                    'name' => $this->serviceJob->technician->name,
+                    'phone' => $this->serviceJob->technician->phone,
+                ];
+            }),
+
+            'maintenance_request' => $this->whenLoaded('maintenanceRequest', function () {
+                return [
+                    'id' => $this->maintenanceRequest->id,
+                    'description' => $this->maintenanceRequest->description,
+                    'priority' => $this->maintenanceRequest->priority,
+                ];
+            }),
         ];
+    }
+
+    private function formatPartsUsed(): ?string
+    {
+        if (!$this->parts_used || !is_array($this->parts_used)) {
+            return null;
+        }
+
+        return collect($this->parts_used)
+            ->map(fn($part) => "{$part['name']} ({$part['quantity']})" . (isset($part['price']) ? " - {$part['price']} ريال" : ''))
+            ->implode('، ');
     }
 }

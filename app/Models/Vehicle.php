@@ -17,7 +17,7 @@ class Vehicle extends Model
         'plate_number',
         'current_km',
         'status',
-        'image', 
+        'image',
     ];
 
     public function user()
@@ -48,8 +48,7 @@ class Vehicle extends Model
     }
 
     public function getImageUrlAttribute(): ?string
-{
-    return $this->image ? asset('storage/' . $this->image) : null;
-}
-    
+    {
+        return $this->image ? asset('storage/' . $this->image) : null;
+    }
 }

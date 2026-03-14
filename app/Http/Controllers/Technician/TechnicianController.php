@@ -33,7 +33,6 @@ class TechnicianController extends Controller
                 'success' => true,
                 'data' => new TechnicianResource($technician)
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error getting profile: ' . $e->getMessage());
             return response()->json([
@@ -53,7 +52,7 @@ class TechnicianController extends Controller
             ]);
 
             $data = $request->validated();
-            
+
             if ($request->hasFile('certifications')) {
                 $data['certifications'] = $request->file('certifications');
             }
@@ -65,12 +64,11 @@ class TechnicianController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => $technician->wasRecentlyCreated 
-                    ? 'تم إنشاء ملفك كتقني بنجاح' 
+                'message' => $technician->wasRecentlyCreated
+                    ? 'تم إنشاء ملفك كتقني بنجاح'
                     : 'تم تحديث الملف الشخصي بنجاح',
                 'data' => new TechnicianResource($technician)
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error updating profile: ' . $e->getMessage());
             return response()->json([
@@ -95,11 +93,10 @@ class TechnicianController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => $request->is_available 
-                    ? 'أنت الآن متاح للعمل' 
+                'message' => $request->is_available
+                    ? 'أنت الآن متاح للعمل'
                     : 'أنت الآن غير متاح للعمل'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error updating availability: ' . $e->getMessage());
             return response()->json([

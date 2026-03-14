@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Vehicle\StoreVehicleRequest;
 use App\Http\Requests\Vehicle\UpdateVehicleRequest;
 use App\Http\Resources\VehicleResource;
+use App\Http\Resources\MaintenanceRecordResource;
 use App\Services\VehicleService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Models\MaintenanceRecord;
 
 class VehicleController extends Controller
 {
@@ -40,35 +42,34 @@ class VehicleController extends Controller
 
     //اضافة مركبة
     public function store(StoreVehicleRequest $request): JsonResponse
-{
-    try {
-        $data = $request->validated();
-        
-        if ($request->hasFile('image')) {
-            $data['image'] = $request->file('image');
+    {
+        try {
+            $data = $request->validated();
+
+            if ($request->hasFile('image')) {
+                $data['image'] = $request->file('image');
+            }
+
+            $vehicle = $this->vehicleService->createVehicle(
+                $request->user(),
+                $data
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'تم إضافة المركبة بنجاح',
+                'data' => new VehicleResource($vehicle)
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ: ' . $e->getMessage()
+            ], 500);
         }
-        
-        $vehicle = $this->vehicleService->createVehicle(
-            $request->user(),
-            $data
-        );
-
-        return response()->json([
-            'success' => true,
-            'message' => 'تم إضافة المركبة بنجاح',
-            'data' => new VehicleResource($vehicle)
-        ], 201);
-
-    } catch (\Exception $e) {
-        return response()->json([
-            'success' => false,
-            'message' => 'حدث خطأ: ' . $e->getMessage()
-        ], 500);
     }
-}
 
     //عرض مركبة محددة
-    public function show(Request $request, int $id): JsonResponse 
+    public function show(Request $request, int $id): JsonResponse
     {
         try {
             $vehicle = $this->vehicleService->getVehicle($id, $request->user());
@@ -86,34 +87,33 @@ class VehicleController extends Controller
     }
 
     //تحديث مركبة
-   public function update(UpdateVehicleRequest $request, int $id): JsonResponse
-{
-    try {
-        $data = $request->validated();
-        
-        if ($request->hasFile('image')) {
-            $data['image'] = $request->file('image');
+    public function update(UpdateVehicleRequest $request, int $id): JsonResponse
+    {
+        try {
+            $data = $request->validated();
+
+            if ($request->hasFile('image')) {
+                $data['image'] = $request->file('image');
+            }
+
+            $vehicle = $this->vehicleService->updateVehicle(
+                $id,
+                $request->user(),
+                $data
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'تم تحديث المركبة بنجاح',
+                'data' => new VehicleResource($vehicle)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
         }
-        
-        $vehicle = $this->vehicleService->updateVehicle(
-            $id,
-            $request->user(),
-            $data
-        );
-
-        return response()->json([
-            'success' => true,
-            'message' => 'تم تحديث المركبة بنجاح',
-            'data' => new VehicleResource($vehicle)
-        ]);
-
-    } catch (\Exception $e) {
-        return response()->json([
-            'success' => false,
-            'message' => $e->getMessage()
-        ], 400);
     }
-}
 
     //حذف مركبة
     public function destroy(Request $request, int $id): JsonResponse
@@ -178,15 +178,25 @@ class VehicleController extends Controller
         }
     }
 
-    //تاريخ الصيانة 
+    //عرض تاريخ صيانة مركبة
     public function maintenanceHistory(Request $request, int $id): JsonResponse
     {
         try {
-            $history = $this->vehicleService->getMaintenanceHistory($id, $request->user());
+            $vehicle = $this->vehicleService->getVehicle($id, $request->user());
+
+            $records = MaintenanceRecord::where('vehicle_id', $vehicle->id)
+                ->with(['serviceJob.technician'])
+                ->latest('completed_at')
+                ->paginate($request->get('per_page', 15));
 
             return response()->json([
                 'success' => true,
-                'data' => $history
+                'data' => MaintenanceRecordResource::collection($records),
+                'meta' => [
+                    'total' => $records->total(),
+                    'per_page' => $records->perPage(),
+                    'current_page' => $records->currentPage(),
+                ]
             ]);
         } catch (\Exception $e) {
             return response()->json([

@@ -20,10 +20,12 @@ class Technician extends Model
     ];
 
     protected $casts = [
-        'certifications' => 'array'
+        'certifications' => 'array',
+        'is_available' => 'boolean',
+        'average_rating' => 'float',
     ];
 
-   
+
 
     public function user()
     {
@@ -33,5 +35,27 @@ class Technician extends Model
     public function serviceJobs()
     {
         return $this->hasMany(ServiceJob::class);
+    }
+
+    public function ratings()
+    {
+        return $this->hasManyThrough(
+            Rating::class,
+            ServiceJob::class,
+            'technician_id',
+            'service_job_id',
+            'user_id',
+            'id'
+        );
+    }
+
+    public function getAverageRatingAttribute()
+    {
+        return $this->ratings()->avg('rating') ?? 0;
+    }
+
+    public function getRatingsCountAttribute()
+    {
+        return $this->ratings()->count();
     }
 }

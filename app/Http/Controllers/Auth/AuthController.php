@@ -31,7 +31,6 @@ class AuthController extends Controller
                     'token_type' => 'Bearer',
                 ]
             ], 201);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -55,14 +54,12 @@ class AuthController extends Controller
                     'token_type' => 'Bearer',
                 ]
             ], 200);
-
         } catch (ValidationException $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'فشل تسجيل الدخول',
                 'errors' => $e->errors()
             ], 401);
-            
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -81,7 +78,6 @@ class AuthController extends Controller
                 'success' => $result['success'],
                 'message' => $result['message']
             ], 200);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -100,7 +96,6 @@ class AuthController extends Controller
                 'success' => $result['success'],
                 'data' => $result['user']
             ], 200);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,

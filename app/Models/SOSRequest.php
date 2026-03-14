@@ -18,7 +18,6 @@ class SosRequest extends Model
         'status'
     ];
 
-    /* ================= Relations ================= */
 
     public function user()
     {

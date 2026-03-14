@@ -57,9 +57,6 @@ class TechnicianMaintenanceService
         return $request;
     }
 
-
-
-
     public function submitQuotation(User $user, int $requestId, array $data): Quotation
     {
         $technician = $user->technician;
@@ -73,8 +70,7 @@ class TechnicianMaintenanceService
         if (!$maintenanceRequest) {
             throw new \Exception('الطلب غير موجود');
         }
-
-        if ($maintenanceRequest->status !== 'pending') {
+        if (!in_array($maintenanceRequest->status, ['pending', 'quoted'])) {
             throw new \Exception('لا يمكن تقديم عرض على هذا الطلب حالياً');
         }
 
@@ -99,7 +95,7 @@ class TechnicianMaintenanceService
                 'status' => 'pending',
             ]);
 
-            if ($maintenanceRequest->quotations()->count() === 0) {
+            if ($maintenanceRequest->quotations()->count() === 1) {
                 $maintenanceRequest->update(['status' => 'quoted']);
             }
 
@@ -139,12 +135,18 @@ class TechnicianMaintenanceService
             throw new \Exception('أنت لست تقنياً');
         }
 
-        $query = ServiceJob::where('technician_id', $technician->user_id)
+        return ServiceJob::where('technician_id', $technician->user_id)
             ->whereIn('status', ['assigned', 'in_progress'])
-            ->with(['maintenanceRequest.user', 'maintenanceRequest.vehicle'])
+            ->with([
+                'maintenanceRequest' => function ($q) {
+                    $q->with(['user', 'vehicle']);
+                },
+                'maintenanceRecord'
+            ])
             ->latest()
             ->get();
     }
+
 
 
     public function updateJobStatus(User $user, int $jobId, array $data): ServiceJob
@@ -156,44 +158,54 @@ class TechnicianMaintenanceService
         }
 
         $job = ServiceJob::where('id', $jobId)
-            ->where('technician_id', $technician->id)
+            ->where('technician_id', $technician->user_id)
             ->first();
 
         if (!$job) {
-            throw new \Exception('الطلب غير موجود أو لا يخصك');
+            throw new \Exception('المهمة غير موجودة أو لا تخصك');
         }
 
         try {
             DB::beginTransaction();
 
-            $job->update([
-                'status' => $data['status'],
-            ]);
+            $job->status = $data['status'];
+
+            if ($data['status'] === 'in_progress' && !$job->started_at) {
+                $job->started_at = now();
+            }
+
+            if ($data['status'] === 'completed' && !$job->completed_at) {
+                $job->completed_at = now();
+            }
+
+            $job->save();
 
             $maintenanceRequest = $job->maintenanceRequest;
-            $maintenanceRequest->update([
-                'status' => $data['status'] === 'in_progress' ? 'in_progress' : 'completed'
-            ]);
+            if ($maintenanceRequest) {
+                $maintenanceRequest->status = $data['status'] === 'completed' ? 'completed' : 'in_progress';
+                $maintenanceRequest->save();
+            }
 
             if ($data['status'] === 'completed') {
                 MaintenanceRecord::create([
                     'service_job_id' => $job->id,
                     'vehicle_id' => $maintenanceRequest->vehicle_id,
+                    'maintenance_request_id' => $maintenanceRequest->id,
                     'details' => $data['completion_notes'] ?? 'تم إنجاز الصيانة',
-                    'parts_used' => isset($data['parts_used']) ? json_encode($data['parts_used']) : null,
-                    'completed_at' => now(),
+                    'parts_used' => $data['parts_used'] ?? null,
+                    'completion_notes' => $data['completion_notes'] ?? null,
+                    'recommendations' => $data['recommendations'] ?? null,
+                    'completed_at' => $job->completed_at,
                 ]);
             }
 
             DB::commit();
-
             return $job->fresh(['maintenanceRequest', 'maintenanceRecord']);
         } catch (\Exception $e) {
             DB::rollBack();
             throw $e;
         }
     }
-
 
     public function addMaintenanceRecord(User $user, int $jobId, array $data): MaintenanceRecord
     {

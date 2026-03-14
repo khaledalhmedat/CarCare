@@ -18,14 +18,14 @@ class UserResource extends JsonResource
             'status' => $this->status,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
-            
+
             'tenant' => $this->whenLoaded('tenant', function () {
                 return [
                     'id' => $this->tenant->id,
                     'name' => $this->tenant->name,
                 ];
             }),
-            
+
             'roles' => $this->whenLoaded('roles', function () {
                 return RoleResource::collection($this->roles);
             }),

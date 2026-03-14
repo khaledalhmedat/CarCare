@@ -28,19 +28,18 @@ class User extends Authenticatable
         'remember_token'
     ];
 
-     public function assignRole($role)
+    public function assignRole($role)
     {
         $this->roles()->sync([$role]);
     }
 
-    
+
 
     protected static function booted()
     {
         static::creating(fn($user) => $user->uuid = Str::uuid());
     }
 
-    /* ================= Relations ================= */
 
     public function tenant()
     {
@@ -62,8 +61,6 @@ class User extends Authenticatable
         return $this->hasMany(MaintenanceRequest::class);
     }
 
-    /* ================= RBAC ================= */
-
     public function hasRole(string $slug): bool
     {
         return $this->roles()->where('slug', $slug)->exists();
@@ -79,7 +76,6 @@ class User extends Authenticatable
             )->exists();
     }
 
-    /* ================= Scopes ================= */
 
     public function scopeActive($query)
     {

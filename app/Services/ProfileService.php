@@ -13,19 +13,19 @@ class ProfileService
         protected UserRepositoryInterface $userRepository
     ) {}
 
-    
+
     public function updateProfile(User $user, array $data): User
     {
-        $updateData = array_filter($data, function($value) {
+        $updateData = array_filter($data, function ($value) {
             return !is_null($value) && $value !== '';
         });
 
         $this->userRepository->update($user, $updateData);
-        
+
         return $user->fresh();
     }
 
-    
+
     public function updatePassword(User $user, string $newPassword): bool
     {
         return $this->userRepository->update($user, [
@@ -33,7 +33,7 @@ class ProfileService
         ]);
     }
 
-    
+
     public function updateAvatar(User $user, $avatarFile): string
     {
         if ($user->avatar) {
@@ -41,25 +41,25 @@ class ProfileService
         }
 
         $path = $avatarFile->store('avatars', 'public');
-        
+
         $this->userRepository->update($user, ['avatar' => $path]);
 
         return $path;
     }
 
-    
+
     public function deleteAvatar(User $user): bool
     {
         if ($user->avatar) {
             Storage::disk('public')->delete($user->avatar);
-            
+
             return $this->userRepository->update($user, ['avatar' => null]);
         }
 
         return false;
     }
 
-    
+
     public function deleteAccount(User $user, string $password): bool
     {
         if (!Hash::check($password, $user->password)) {

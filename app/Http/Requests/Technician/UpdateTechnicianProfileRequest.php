@@ -19,9 +19,9 @@ class UpdateTechnicianProfileRequest extends FormRequest
             'phone' => ['sometimes', 'string', 'max:20'],
             'city' => ['sometimes', 'string', 'max:100'],
             'hourly_rate' => ['nullable', 'numeric', 'min:0'],
-            
-            'certifications' => ['nullable', 'array', 'max:5'], 
-            'certifications.*' => ['file', 'mimes:pdf,jpeg,png,jpg', 'max:2048'], 
+
+            'certifications' => ['nullable', 'array', 'max:5'],
+            'certifications.*' => ['file', 'mimes:pdf,jpeg,png,jpg', 'max:2048'],
         ];
     }
 
@@ -31,7 +31,7 @@ class UpdateTechnicianProfileRequest extends FormRequest
             'specialization.string' => 'التخصص يجب أن يكون نصاً',
             'experience_years.integer' => 'سنوات الخبرة يجب أن تكون رقماً',
             'hourly_rate.numeric' => 'سعر الساعة يجب أن يكون رقماً',
-            
+
             'certifications.array' => 'الشهادات يجب أن تكون مصفوفة',
             'certifications.max' => 'يمكنك رفع 5 شهادات كحد أقصى',
             'certifications.*.file' => 'كل شهادة يجب أن تكون ملفاً',

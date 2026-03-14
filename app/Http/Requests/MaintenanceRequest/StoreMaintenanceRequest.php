@@ -18,7 +18,7 @@ class StoreMaintenanceRequest extends FormRequest
             'description' => ['required', 'string', 'min:10', 'max:1000'],
             'priority' => ['required', 'in:low,medium,high,emergency'],
             'preferred_date' => ['nullable', 'date', 'after:today'],
-            
+
             'images' => ['nullable', 'array', 'max:5'],
             'images.*' => ['image', 'mimes:jpeg,png,jpg', 'max:2048'],
         ];
@@ -33,7 +33,7 @@ class StoreMaintenanceRequest extends FormRequest
             'description.min' => 'الوصف يجب أن لا يقل عن 10 أحرف',
             'priority.required' => 'الأولوية مطلوبة',
             'priority.in' => 'الأولوية يجب أن تكون: منخفضة، متوسطة، عالية، طارئة',
-            
+
             'images.array' => 'الصور يجب أن تكون مصفوفة',
             'images.max' => 'يمكنك رفع 5 صور كحد أقصى',
             'images.*.image' => 'الملف يجب أن يكون صورة',

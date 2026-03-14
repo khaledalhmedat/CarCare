@@ -20,7 +20,7 @@ class ProfileController extends Controller
     //عرض البروفايل
     public function show(Request $request): JsonResponse
     {
-        $user = $request->user()->load(['vehicles', 'maintenanceRequests' => function($q) {
+        $user = $request->user()->load(['vehicles', 'maintenanceRequests' => function ($q) {
             $q->latest()->limit(5);
         }]);
 
@@ -45,7 +45,6 @@ class ProfileController extends Controller
                 'message' => 'تم تحديث البيانات بنجاح',
                 'data' => new ProfileResource($user)
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -68,7 +67,6 @@ class ProfileController extends Controller
                 'success' => true,
                 'message' => 'تم تحديث كلمة المرور بنجاح'
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -94,7 +92,6 @@ class ProfileController extends Controller
                     'avatar_url' => asset('storage/' . $path)
                 ]
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -114,7 +111,6 @@ class ProfileController extends Controller
                 'success' => true,
                 'message' => 'تم حذف الصورة بنجاح'
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -141,7 +137,6 @@ class ProfileController extends Controller
                 'success' => true,
                 'message' => 'تم حذف الحساب بنجاح'
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,

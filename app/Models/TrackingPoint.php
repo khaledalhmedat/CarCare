@@ -17,4 +17,3 @@ class TrackingPoint extends Model
         return $this->belongsTo(LiveTrackingSession::class, 'live_tracking_session_id');
     }
 }
-

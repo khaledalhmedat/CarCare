@@ -4,8 +4,12 @@ namespace App\Http\Controllers\MaintenanceRequest;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\MaintenanceRequest\StoreMaintenanceRequest;
+use App\Http\Requests\MaintenanceRequest\UpdateMaintenanceRequest;
 use App\Http\Requests\MaintenanceRequest\CancelMaintenanceRequest;
+use App\Http\Requests\User\AcceptQuotationRequest;
+use App\Http\Requests\User\RateServiceRequest;
 use App\Http\Resources\MaintenanceRequestResource;
+use App\Http\Resources\UserQuotationResource;
 use App\Services\MaintenanceRequestService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,8 +20,7 @@ class MaintenanceRequestController extends Controller
         protected MaintenanceRequestService $requestService
     ) {}
 
-    //عرض طلبات الصيانة للمستخدم
-    
+
     public function index(Request $request): JsonResponse
     {
         try {
@@ -36,7 +39,6 @@ class MaintenanceRequestController extends Controller
                     'current_page' => $requests->currentPage(),
                 ]
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -45,7 +47,7 @@ class MaintenanceRequestController extends Controller
         }
     }
 
-    //عرض الطلبات المعلقة 
+
     public function pending(Request $request): JsonResponse
     {
         try {
@@ -55,7 +57,6 @@ class MaintenanceRequestController extends Controller
                 'success' => true,
                 'data' => MaintenanceRequestResource::collection($requests)
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -64,7 +65,7 @@ class MaintenanceRequestController extends Controller
         }
     }
 
-    //عرض الطلبات المقبولة
+
     public function accepted(Request $request): JsonResponse
     {
         try {
@@ -74,7 +75,6 @@ class MaintenanceRequestController extends Controller
                 'success' => true,
                 'data' => MaintenanceRequestResource::collection($requests)
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -83,7 +83,7 @@ class MaintenanceRequestController extends Controller
         }
     }
 
-    //عرض الطلبات المنجزة
+
     public function completed(Request $request): JsonResponse
     {
         try {
@@ -93,7 +93,6 @@ class MaintenanceRequestController extends Controller
                 'success' => true,
                 'data' => MaintenanceRequestResource::collection($requests)
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -102,7 +101,7 @@ class MaintenanceRequestController extends Controller
         }
     }
 
-    //عرض طلب محدد
+
     public function show(Request $request, int $id): JsonResponse
     {
         try {
@@ -110,9 +109,10 @@ class MaintenanceRequestController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => new MaintenanceRequestResource($maintenanceRequest)
+                'data' => new MaintenanceRequestResource(
+                    $maintenanceRequest->load(['vehicle', 'photos', 'quotations.technician'])
+                )
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -121,7 +121,7 @@ class MaintenanceRequestController extends Controller
         }
     }
 
-    //انشاء طلب جديد
+
     public function store(StoreMaintenanceRequest $request): JsonResponse
     {
         try {
@@ -135,7 +135,6 @@ class MaintenanceRequestController extends Controller
                 'message' => 'تم إنشاء طلب الصيانة بنجاح',
                 'data' => new MaintenanceRequestResource($maintenanceRequest)
             ], 201);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -144,8 +143,8 @@ class MaintenanceRequestController extends Controller
         }
     }
 
-    //تعديل طلب
-    public function update(StoreMaintenanceRequest $request, int $id): JsonResponse
+
+    public function update(UpdateMaintenanceRequest $request, int $id): JsonResponse
     {
         try {
             $maintenanceRequest = $this->requestService->updateRequest(
@@ -159,7 +158,6 @@ class MaintenanceRequestController extends Controller
                 'message' => 'تم تحديث طلب الصيانة بنجاح',
                 'data' => new MaintenanceRequestResource($maintenanceRequest)
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -168,7 +166,7 @@ class MaintenanceRequestController extends Controller
         }
     }
 
-    //الغاء طلب
+
     public function cancel(CancelMaintenanceRequest $request, int $id): JsonResponse
     {
         try {
@@ -182,7 +180,6 @@ class MaintenanceRequestController extends Controller
                 'success' => true,
                 'message' => 'تم إلغاء طلب الصيانة بنجاح'
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -191,7 +188,7 @@ class MaintenanceRequestController extends Controller
         }
     }
 
-    //حذف طلب
+
     public function destroy(Request $request, int $id): JsonResponse
     {
         try {
@@ -201,7 +198,6 @@ class MaintenanceRequestController extends Controller
                 'success' => true,
                 'message' => 'تم حذف طلب الصيانة بنجاح'
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -210,8 +206,56 @@ class MaintenanceRequestController extends Controller
         }
     }
 
-    //قبول عرض سعر
-    public function acceptQuotation(Request $request, int $id, int $quotationId): JsonResponse
+
+    public function quotations(Request $request, int $id): JsonResponse
+    {
+        try {
+            $quotations = $this->requestService->getRequestQuotations(
+                $request->user(),
+                $id
+            );
+
+            return response()->json([
+                'success' => true,
+                'data' => UserQuotationResource::collection($quotations)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
+
+
+    public function acceptQuotation(AcceptQuotationRequest $request, int $id, int $quotationId): JsonResponse
+    {
+        try {
+            $result = $this->requestService->acceptQuotationWithSchedule(
+                $id,
+                $quotationId,
+                $request->user(),
+                $request->validated()
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'تم قبول عرض السعر وجدولة الموعد بنجاح',
+                'data' => [
+                    'quotation' => new UserQuotationResource($result['quotation']),
+                    'service_job' => $result['service_job'],
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
+
+
+    public function acceptQuotationQuick(Request $request, int $id, int $quotationId): JsonResponse
     {
         try {
             $this->requestService->acceptQuotation(
@@ -222,14 +266,138 @@ class MaintenanceRequestController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'تم قبول العرض بنجاح'
+                'message' => 'تم قبول عرض السعر بنجاح'
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage()
             ], 400);
+        }
+    }
+
+
+    public function rejectQuotation(Request $request, int $quotationId): JsonResponse
+    {
+        $request->validate([
+            'reason' => ['nullable', 'string', 'max:500']
+        ]);
+
+        try {
+            $this->requestService->rejectQuotation(
+                $request->user(),
+                $quotationId,
+                $request->reason
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'تم رفض عرض السعر'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
+
+
+    public function acceptedQuotation(Request $request, int $id): JsonResponse
+    {
+        try {
+            $quotation = $this->requestService->getAcceptedQuotation(
+                $request->user(),
+                $id
+            );
+
+            if (!$quotation) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'لا يوجد عرض مقبول لهذا الطلب'
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => new UserQuotationResource($quotation)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
+
+
+    public function rateService(RateServiceRequest $request, int $jobId): JsonResponse
+    {
+        try {
+            $rating = $this->requestService->rateService(
+                $request->user(),
+                $jobId,
+                $request->validated()
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'تم تقييم الخدمة بنجاح',
+                'data' => [
+                    'id' => $rating->id,
+                    'rating' => $rating->rating,
+                    'review' => $rating->review,
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
+
+
+    public function reopenRequest(Request $request, int $id): JsonResponse
+    {
+        try {
+            $this->requestService->reopenRequest($id, $request->user());
+
+            return response()->json([
+                'success' => true,
+                'message' => 'تم إعادة فتح الطلب بنجاح'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
+
+
+    public function statistics(Request $request): JsonResponse
+    {
+        try {
+            $user = $request->user();
+
+            $stats = [
+                'total_requests' => $user->maintenanceRequests()->count(),
+                'pending_requests' => $user->maintenanceRequests()->whereIn('status', ['pending', 'quoted'])->count(),
+                'accepted_requests' => $user->maintenanceRequests()->whereIn('status', ['quotation_accepted', 'in_progress'])->count(),
+                'completed_requests' => $user->maintenanceRequests()->where('status', 'completed')->count(),
+                'cancelled_requests' => $user->maintenanceRequests()->where('status', 'cancelled')->count(),
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => $stats
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
         }
     }
 }

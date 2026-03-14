@@ -25,14 +25,12 @@ class Tenant extends Model
         });
     }
 
-    /* ================= Relations ================= */
 
     public function users()
     {
         return $this->hasMany(User::class);
     }
 
-    /* ================= Scopes ================= */
 
     public function scopeActive($query)
     {

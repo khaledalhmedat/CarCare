@@ -9,7 +9,7 @@ class UpdateProfileRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true; 
+        return true;
     }
 
     public function rules(): array
@@ -17,9 +17,9 @@ class UpdateProfileRequest extends FormRequest
         return [
             'name' => ['sometimes', 'string', 'max:255'],
             'email' => [
-                'sometimes', 
-                'string', 
-                'email', 
+                'sometimes',
+                'string',
+                'email',
                 'max:255',
                 Rule::unique('users')->ignore($this->user()->id)
             ],

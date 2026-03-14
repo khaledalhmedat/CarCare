@@ -17,7 +17,7 @@ class AuthService
     {
         try {
             $user = $this->authRepository->register($data);
-            
+
             $token = $this->authRepository->createToken($user);
 
             return [
@@ -26,7 +26,6 @@ class AuthService
                 'token' => $token,
                 'message' => 'تم إنشاء الحساب بنجاح'
             ];
-
         } catch (\Exception $e) {
             throw new \Exception('فشل في إنشاء الحساب: ' . $e->getMessage());
         }
@@ -39,7 +38,7 @@ class AuthService
                 $credentials['email'],
                 $credentials['password']
             );
-            
+
             $token = $this->authRepository->createToken($user);
 
             return [
@@ -48,7 +47,6 @@ class AuthService
                 'token' => $token,
                 'message' => 'تم تسجيل الدخول بنجاح'
             ];
-
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
@@ -65,7 +63,6 @@ class AuthService
                 'success' => true,
                 'message' => 'تم تسجيل الخروج بنجاح'
             ];
-
         } catch (\Exception $e) {
             throw new \Exception('فشل في تسجيل الخروج: ' . $e->getMessage());
         }

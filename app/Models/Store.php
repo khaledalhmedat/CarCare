@@ -9,10 +9,19 @@ use Illuminate\Database\Eloquent\Model;
 class Store extends Model
 {
     protected $fillable = [
-        'user_id', 'store_name', 'commercial_register',
-        'tax_number', 'phone', 'address', 'city',
-        'latitude', 'longitude', 'logo', 'description',
-        'is_verified', 'status'
+        'user_id',
+        'store_name',
+        'commercial_register',
+        'tax_number',
+        'phone',
+        'address',
+        'city',
+        'latitude',
+        'longitude',
+        'logo',
+        'description',
+        'is_verified',
+        'status'
     ];
 
     public function user()
