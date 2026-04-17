@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class CarwashBooking extends Model
+class FuelOrder extends Model
 {
     const STATUS_PENDING = 'pending';
     const STATUS_ACCEPTED = 'accepted';
@@ -15,12 +15,15 @@ class CarwashBooking extends Model
     protected $fillable = [
         'user_id',
         'vehicle_id',
-        'technician_id',
-        'car_washer_id',
-        'scheduled_at',
-        'service_type',
-        'price',
+        'fuel_provider_id',
+        'fuel_type',
+        'amount',
+        'delivery_address',
+        'delivery_latitude',
+        'delivery_longitude',
+        'total_price',
         'status',
+        'scheduled_time',
         'accepted_at',
         'started_at',
         'completed_at',
@@ -29,11 +32,14 @@ class CarwashBooking extends Model
     ];
 
     protected $casts = [
-        'scheduled_at' => 'datetime',
+        'scheduled_time' => 'datetime',
         'accepted_at' => 'datetime',
         'started_at' => 'datetime',
         'completed_at' => 'datetime',
-        'price' => 'decimal:2',
+        'delivery_latitude' => 'decimal:7',
+        'delivery_longitude' => 'decimal:7',
+        'amount' => 'float',
+        'total_price' => 'decimal:2',
     ];
 
     public function user()
@@ -46,19 +52,19 @@ class CarwashBooking extends Model
         return $this->belongsTo(Vehicle::class);
     }
 
-    public function technician()
+    public function fuelProvider()
     {
-        return $this->belongsTo(User::class, 'technician_id');
+        return $this->belongsTo(FuelProvider::class);
     }
 
-    public function carWasher()
+    public function fuelLog()
     {
-        return $this->belongsTo(CarWasher::class);
+        return $this->hasOne(FuelLog::class);
     }
 
-    public function rating()
+    public function isPending(): bool
     {
-        return $this->hasOne(CarWashRating::class);
+        return $this->status === self::STATUS_PENDING;
     }
 
     public function canCancel(): bool

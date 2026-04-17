@@ -3,39 +3,33 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
-class CarWasher extends Model
+class FuelProvider extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'user_id',
-        'shop_name',
-        'logo',
+        'company_name',
         'phone',
         'city',
         'address',
-        'description',
         'latitude',
         'longitude',
-        'services',
+        'fuel_types',
         'prices',
-        'service_prices',
-        'working_hours',
         'is_available',
         'is_verified',
-        'average_rating',
-        'ratings_count',
     ];
 
     protected $casts = [
-        'services' => 'array',
+        'fuel_types' => 'array',
         'prices' => 'array',
-        'service_prices' => 'array',
-        'working_hours' => 'array',
         'latitude' => 'decimal:7',
         'longitude' => 'decimal:7',
         'is_available' => 'boolean',
         'is_verified' => 'boolean',
-        'average_rating' => 'decimal:2',
     ];
 
     public function user()
@@ -43,13 +37,8 @@ class CarWasher extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function bookings()
+    public function fuelOrders()
     {
-        return $this->hasMany(CarwashBooking::class);
-    }
-
-    public function ratings()
-    {
-        return $this->hasMany(CarWashRating::class);
+        return $this->hasMany(FuelOrder::class);
     }
 }

@@ -7,6 +7,10 @@ use App\Http\Controllers\MaintenanceRequest\MaintenanceRequestController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Technician\TechnicianController;
 use App\Http\Controllers\Technician\TechnicianMaintenanceController;
+use App\Http\Controllers\FuelOrder\FuelOrderController;
+use App\Http\Controllers\CarwashBooking\CarwashBookingController;
+use App\Http\Controllers\CarWasher\CarWasherController;
+
 
 
 
@@ -104,4 +108,53 @@ Route::prefix('technician')->middleware('auth:sanctum')->group(function () {
 Route::prefix('debug')->middleware('auth:sanctum')->group(function () {
     Route::get('/technician-jobs', [TechnicianMaintenanceController::class, 'debugJobs']);
     Route::get('/technician-all-jobs', [TechnicianMaintenanceController::class, 'allMyJobs']);
+});
+
+
+
+Route::prefix('fuel-orders')->middleware('auth:sanctum')->group(function () {
+    Route::get('/', [FuelOrderController::class, 'index']);
+    Route::post('/', [FuelOrderController::class, 'store']);
+    Route::get('/{id}', [FuelOrderController::class, 'show']);
+    Route::post('/{id}/cancel', [FuelOrderController::class, 'cancel']);
+});
+
+
+Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
+
+    Route::get('/car_washers', [CarwashBookingController::class, 'availableCarWashers']);
+
+    Route::get('/car_washers/{id}', [CarwashBookingController::class, 'showCarWasher']);
+
+    Route::post('/carwash_bookings', [CarwashBookingController::class, 'store']);
+
+    Route::get('/carwash_bookings', [CarwashBookingController::class, 'index']);
+
+    Route::get('/carwash_bookings/{id}', [CarwashBookingController::class, 'show']);
+
+    Route::post('/carwash_bookings/{id}/cancel', [CarwashBookingController::class, 'cancel']);
+
+    Route::post('/carwash_bookings/{id}/rate', [CarwashBookingController::class, 'rateCarWasher']);
+
+    Route::get('/car_washers/{id}/ratings', [CarwashBookingController::class, 'carWasherRatings']);
+});
+
+Route::middleware(['auth:sanctum'])->prefix('car_washer')->group(function () {
+
+
+    Route::get('/statistics', [CarWasherController::class, 'statistics']);
+
+    Route::get('/my_profile', [CarWasherController::class, 'myProfile']);
+
+    Route::post('/profile', [CarWasherController::class, 'storeOrUpdateProfile']);
+
+    Route::post('/profile/logo', [CarWasherController::class, 'uploadLogo']);
+    Route::delete('/profile/logo', [CarWasherController::class, 'deleteLogo']);
+
+    Route::get('/my_bookings', [CarWasherController::class, 'myBookings']);
+    Route::post('/bookings/{id}/accept', [CarWasherController::class, 'acceptBooking']);
+    Route::post('/bookings/{id}/reject', [CarWasherController::class, 'rejectBooking']);
+    Route::patch('/bookings/{id}/status', [CarWasherController::class, 'updateBookingStatus']);
+
+    Route::patch('/availability', [CarWasherController::class, 'updateAvailability']);
 });
