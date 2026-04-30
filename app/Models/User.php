@@ -110,35 +110,31 @@ class User extends Authenticatable
         return $this->hasRole('technician') && $this->technician()->exists();
     }
 
-     /**
-     * العلاقة مع طلبات الوقود
-     */
+    
     public function fuelOrders()
     {
         return $this->hasMany(FuelOrder::class);
     }
 
-    /**
-     * العلاقة مع حجوزات غسيل السيارات
-     */
+    
     public function carwashBookings()
     {
         return $this->hasMany(CarwashBooking::class);
     }
 
-    /**
-     * العلاقة مع مزود خدمة الوقود
-     */
-    public function fuelProvider()
+        public function fuelProvider()
     {
         return $this->hasOne(FuelProvider::class);
     }
 
-    /**
-     * العلاقة مع مغسلة السيارات
-     */
+    
     public function carWasher()
     {
         return $this->hasOne(CarWasher::class);
+    }
+
+     public function sosRequests()
+    {
+        return $this->hasMany(SosRequest::class);
     }
 }

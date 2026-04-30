@@ -13,6 +13,7 @@ return new class extends Migration
     {
         Schema::create('tracking_points', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('sos_request_id')->constrained()->cascadeOnDelete();
             $table->foreignId('live_tracking_session_id')->constrained()->cascadeOnDelete();
             $table->decimal('lat', 10, 7);
             $table->decimal('lng', 10, 7);

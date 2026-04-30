@@ -9,7 +9,10 @@ class TrackingPoint extends Model
     protected $fillable = [
         'live_tracking_session_id',
         'lat',
-        'lng'
+        'lng',
+        'sos_request_id',
+        'technician_id',
+        'live_tracking_session_id'
     ];
 
     public function session()

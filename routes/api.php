@@ -10,6 +10,12 @@ use App\Http\Controllers\Technician\TechnicianMaintenanceController;
 use App\Http\Controllers\FuelOrder\FuelOrderController;
 use App\Http\Controllers\CarwashBooking\CarwashBookingController;
 use App\Http\Controllers\CarWasher\CarWasherController;
+use App\Http\Controllers\Sos\SosController;
+use App\Http\Controllers\TechnicianSos\TechnicianSosController;
+use App\Http\Controllers\Tracking\TrackingController;
+
+
+
 
 
 
@@ -157,4 +163,41 @@ Route::middleware(['auth:sanctum'])->prefix('car_washer')->group(function () {
     Route::patch('/bookings/{id}/status', [CarWasherController::class, 'updateBookingStatus']);
 
     Route::patch('/availability', [CarWasherController::class, 'updateAvailability']);
+});
+
+
+
+Route::middleware('auth:sanctum')->prefix('sos')->group(function () {
+    Route::get('/', [SosController::class, 'index']);
+    Route::post('/', [SosController::class, 'store']);
+    Route::get('/{id}', [SosController::class, 'show']);
+    Route::post('/{id}/cancel', [SosController::class, 'cancel']);
+});
+
+
+
+
+Route::middleware(['auth:sanctum'])->prefix('technician/sos')->group(function () {
+    
+    Route::get('/available', [TechnicianSosController::class, 'availableRequests']);
+    
+    Route::get('/requests/{id}', [TechnicianSosController::class, 'showRequest']);
+    
+    Route::post('/requests/{id}/accept', [TechnicianSosController::class, 'acceptRequest']);
+    
+    Route::patch('/requests/{id}/status', [TechnicianSosController::class, 'updateStatus']);
+    
+    Route::get('/my_requests', [TechnicianSosController::class, 'myRequests']);
+    
+    Route::get('/statistics', [TechnicianSosController::class, 'statistics']);
+});
+
+
+
+Route::middleware(['auth:sanctum'])->group(function () {
+    Route::post('/sos/{id}/location', [TrackingController::class, 'shareLocation']);
+});
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/sos/{id}/track', [TrackingController::class, 'trackTechnician']);
 });

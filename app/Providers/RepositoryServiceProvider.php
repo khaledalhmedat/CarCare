@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use App\Repositories\Contracts\AuthRepositoryInterface;
+use App\Repositories\Contracts\Sos;
 use App\Repositories\Contracts\CarwashRepositoryInterface;
 use App\Repositories\Contracts\CarWasherRepositoryInterface;
 use App\Repositories\Implementation\CarwashRepository;
@@ -19,9 +20,9 @@ use App\Repositories\Implementation\MaintenanceRequestRepository;
 use App\Repositories\Implementation\VehicleRepository;
 use App\Services\MaintenanceRequestService;
 use App\Services\VehicleService;
-
-
 use App\Models\User;
+use App\Repositories\Contracts\SosRepositoryInterface;
+use App\Repositories\Implementation\SosRepository;
 
 class RepositoryServiceProvider extends ServiceProvider
 {
@@ -70,6 +71,12 @@ class RepositoryServiceProvider extends ServiceProvider
             CarWasherRepositoryInterface::class,
             CarWasherRepository::class
         );
+
+        $this->app->bind(
+            SosRepositoryInterface::class,
+            SosRepository::class
+        );
+
     }
 
     public function boot(): void
