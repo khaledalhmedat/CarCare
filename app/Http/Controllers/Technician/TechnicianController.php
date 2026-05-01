@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Technician;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Technician\UpdateTechnicianProfileRequest;
+use App\Http\Requests\Technician\UpdateTechnicianLocationRequest;
 use App\Http\Resources\TechnicianResource;
 use App\Services\TechnicianService;
 use Illuminate\Http\JsonResponse;
@@ -104,5 +105,28 @@ class TechnicianController extends Controller
                 'message' => $e->getMessage()
             ], 400);
         }
+    }
+
+
+    public function updateLocation(UpdateTechnicianLocationRequest $request)
+    {
+        $technician = $request->user()->technician;
+
+        if (!$technician) {
+            return response()->json([
+                'success' => false,
+                'message' => 'أنت لست تقنياً'
+            ], 403);
+        }
+
+        $technician->update([
+            'latitude' => $request->latitude,
+            'longitude' => $request->longitude,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم تحديث موقعك بنجاح'
+        ]);
     }
 }

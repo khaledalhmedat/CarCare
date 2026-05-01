@@ -201,3 +201,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/sos/{id}/track', [TrackingController::class, 'trackTechnician']);
 });
+
+
+Route::middleware(['auth:sanctum'])->prefix('technician')->group(function () {
+    Route::post('/location', [TechnicianController::class, 'updateLocation']);
+});

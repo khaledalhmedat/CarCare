@@ -3,6 +3,7 @@
 namespace App\Events;
 
 use App\Models\SosRequest;
+use App\Models\Technician;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -13,13 +14,22 @@ class NewSosRequest implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public SosRequest $sosRequest) {}
+    public function __construct(
+        public SosRequest $sosRequest,
+        public ?Technician $technician = null,
+        public ?float $distance = null
+    ) {}
 
     public function broadcastOn(): array
     {
+        if ($this->technician) {
+            return [
+                new Channel('technician.' . $this->technician->user_id)
+            ];
+        }
+        
         return [
-            new Channel('sos-requests'),
-            new Channel('technician.' . $this->sosRequest->city)
+            new Channel('sos-requests')
         ];
     }
 
@@ -30,15 +40,24 @@ class NewSosRequest implements ShouldBroadcast
 
     public function broadcastWith(): array
     {
-        return [
+        $data = [
             'id' => $this->sosRequest->id,
             'lat' => $this->sosRequest->lat,
             'lng' => $this->sosRequest->lng,
+            'city' => $this->sosRequest->city,
             'description' => $this->sosRequest->description,
             'vehicle' => [
                 'brand' => $this->sosRequest->vehicle->brand,
                 'model' => $this->sosRequest->vehicle->model,
-            ]
+                'plate_number' => $this->sosRequest->vehicle->plate_number,
+            ],
         ];
+        
+        if ($this->distance) {
+            $data['distance'] = $this->distance; 
+            $data['distance_text'] = $this->distance . ' كم';
+        }
+        
+        return $data;
     }
 }

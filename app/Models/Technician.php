@@ -17,12 +17,16 @@ class Technician extends Model
         'hourly_rate',
         'is_available',
         'certifications',
+        'latitude',
+        'longitude',     
     ];
 
     protected $casts = [
         'certifications' => 'array',
         'is_available' => 'boolean',
         'average_rating' => 'float',
+        'latitude' => 'decimal:7',
+        'longitude' => 'decimal:7',
     ];
 
 

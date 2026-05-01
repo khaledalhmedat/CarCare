@@ -11,12 +11,14 @@ class StoreSosRequest extends FormRequest
         return true;
     }
 
+
     public function rules(): array
     {
         return [
             'vehicle_id' => ['required', 'exists:vehicles,id'],
             'lat' => ['required', 'numeric', 'between:-90,90'],
             'lng' => ['required', 'numeric', 'between:-180,180'],
+            'city' => ['nullable', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:500'],
         ];
     }
