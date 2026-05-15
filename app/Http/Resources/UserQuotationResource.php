@@ -3,9 +3,12 @@
 namespace App\Http\Resources;
 
 use Illuminate\Http\Resources\Json\JsonResource;
+use App\Helpers\TechnicianLocationHelper;
 
 class UserQuotationResource extends JsonResource
 {
+    use TechnicianLocationHelper;
+
     public function toArray($request): array
     {
         return [
@@ -16,8 +19,9 @@ class UserQuotationResource extends JsonResource
             'notes' => $this->notes,
             'parts_included' => $this->parts_included ?? false,
             'status' => $this->status,
-            'status_text' => $this->status === 'pending' ? 'قيد الانتظار' : ($this->status === 'accepted' ? 'مقبول' : 'مرفوض'),
-
+            'status_text' => $this->status === 'pending' ? 'قيد الانتظار' : 
+                            ($this->status === 'accepted' ? 'مقبول' : 'مرفوض'),
+            
             'technician' => [
                 'id' => $this->technician->id,
                 'name' => $this->technician->name,
@@ -25,9 +29,10 @@ class UserQuotationResource extends JsonResource
                 'technician_profile' => $this->technician->technician ? [
                     'specialization' => $this->technician->technician->specialization,
                     'experience_years' => $this->technician->technician->experience_years,
+                    'current_location' => $this->formatTechnicianLocation($this->technician->technician),
                 ] : null,
             ],
-
+            
             'created_at' => $this->created_at->toDateTimeString(),
             'created_ago' => $this->created_at->diffForHumans(),
         ];

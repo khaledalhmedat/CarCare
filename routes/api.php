@@ -178,18 +178,20 @@ Route::middleware('auth:sanctum')->prefix('sos')->group(function () {
 
 
 Route::middleware(['auth:sanctum'])->prefix('technician/sos')->group(function () {
-    
+
     Route::get('/available', [TechnicianSosController::class, 'availableRequests']);
-    
+
     Route::get('/requests/{id}', [TechnicianSosController::class, 'showRequest']);
-    
+
     Route::post('/requests/{id}/accept', [TechnicianSosController::class, 'acceptRequest']);
-    
+
     Route::patch('/requests/{id}/status', [TechnicianSosController::class, 'updateStatus']);
-    
+
     Route::get('/my_requests', [TechnicianSosController::class, 'myRequests']);
-    
+
     Route::get('/statistics', [TechnicianSosController::class, 'statistics']);
+
+    Route::post('/requests/{id}/cancel', [TechnicianSosController::class, 'cancelRequest']);
 });
 
 
