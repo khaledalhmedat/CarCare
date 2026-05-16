@@ -7,7 +7,7 @@ trait HaversineTrait
     
     protected function calculateDistance(float $lat1, float $lng1, float $lat2, float $lng2): float
     {
-        $earthRadius = 6371; // كيلومتر
+        $earthRadius = 6371;
         
         $latDelta = deg2rad($lat2 - $lat1);
         $lngDelta = deg2rad($lng2 - $lng1);

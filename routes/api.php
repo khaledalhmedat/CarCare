@@ -13,6 +13,10 @@ use App\Http\Controllers\CarWasher\CarWasherController;
 use App\Http\Controllers\Sos\SosController;
 use App\Http\Controllers\TechnicianSos\TechnicianSosController;
 use App\Http\Controllers\Tracking\TrackingController;
+use App\Http\Controllers\FuelProvider\FuelProviderController;
+use App\Http\Controllers\FuelProviderOrder\FuelProviderOrderController;
+
+
 
 
 
@@ -118,12 +122,7 @@ Route::prefix('debug')->middleware('auth:sanctum')->group(function () {
 
 
 
-Route::prefix('fuel-orders')->middleware('auth:sanctum')->group(function () {
-    Route::get('/', [FuelOrderController::class, 'index']);
-    Route::post('/', [FuelOrderController::class, 'store']);
-    Route::get('/{id}', [FuelOrderController::class, 'show']);
-    Route::post('/{id}/cancel', [FuelOrderController::class, 'cancel']);
-});
+
 
 
 Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
@@ -207,4 +206,36 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::middleware(['auth:sanctum'])->prefix('technician')->group(function () {
     Route::post('/location', [TechnicianController::class, 'updateLocation']);
+});
+
+
+// routes/api.php
+
+Route::middleware(['auth:sanctum'])->prefix('fuel_provider')->group(function () {
+    Route::get('/my_profile', [FuelProviderController::class, 'myProfile']);
+    Route::post('/profile', [FuelProviderController::class, 'storeOrUpdateProfile']);
+    Route::put('/profile', [FuelProviderController::class, 'storeOrUpdateProfile']);
+    Route::patch('/availability', [FuelProviderController::class, 'updateAvailability']);
+    Route::post('/prices', [FuelProviderController::class, 'updatePrices']);
+    Route::get('/statistics', [FuelProviderController::class, 'statistics']);
+
+    Route::get('/available_orders', [FuelProviderOrderController::class, 'availableOrders']);
+    Route::get('/orders/{id}', [FuelProviderOrderController::class, 'showOrder']);
+    Route::post('/orders/{id}/accept', [FuelProviderOrderController::class, 'acceptOrder']);
+    Route::post('/orders/{id}/location', [FuelProviderOrderController::class, 'shareLocation']);
+    Route::patch('/orders/{id}/status', [FuelProviderOrderController::class, 'updateOrderStatus']);
+    Route::post('/orders/{id}/cancel', [FuelProviderOrderController::class, 'cancelOrder']);
+    Route::get('/my_orders', [FuelProviderOrderController::class, 'myOrders']);
+});
+
+
+Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
+
+    Route::get('/fuel_orders', [FuelOrderController::class, 'index']);
+    Route::get('/fuel_orders/{id}', [FuelOrderController::class, 'show']);
+    Route::post('/fuel_orders/cancel/{id}', [FuelOrderController::class, 'cancel']);
+
+    Route::post('/fuel_orders/emergency', [FuelOrderController::class, 'emergency']);
+
+    Route::get('/fuel_orders/{id}/track', [FuelOrderController::class, 'trackProvider']);
 });

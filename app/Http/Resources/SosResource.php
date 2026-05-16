@@ -6,12 +6,14 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class SosResource extends JsonResource
 {
+
     public function toArray($request): array
     {
         return [
             'id' => $this->id,
             'lat' => $this->lat,
             'lng' => $this->lng,
+            'city' => $this->city,
             'description' => $this->description,
             'status' => $this->status,
             'status_text' => $this->getStatusText(),
@@ -30,7 +32,7 @@ class SosResource extends JsonResource
 
     private function getStatusText(): string
     {
-        return match($this->status) {
+        return match ($this->status) {
             'open' => 'قيد الانتظار',
             'accepted' => 'تم الاستجابة',
             'in_progress' => 'جاري التنفيذ',

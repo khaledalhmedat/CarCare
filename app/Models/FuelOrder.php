@@ -71,4 +71,9 @@ class FuelOrder extends Model
     {
         return in_array($this->status, [self::STATUS_PENDING, self::STATUS_ACCEPTED]);
     }
+
+    public function trackingPoints()
+    {
+        return $this->hasMany(FuelOrderTrackingPoint::class);
+    }
 }

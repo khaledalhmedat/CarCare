@@ -4,12 +4,22 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Models\FuelOrder;
+use App\Models\FuelProvider;
 use App\Repositories\Contracts\FuelOrderRepositoryInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use App\Events\NewEmergencyFuelOrder;
+use Illuminate\Support\Facades\Http;
+use App\Helpers\HaversineTrait;
+
+
+
 
 class FuelOrderService
 {
     public function __construct(protected FuelOrderRepositoryInterface $repository) {}
+
+    use HaversineTrait;
 
     public function getUserOrders(User $user, ?string $status = null)
     {
@@ -65,5 +75,140 @@ class FuelOrderService
         }
         $this->repository->updateStatus($order, $status);
         return $order->fresh();
+    }
+
+
+    public function createEmergencyOrder(User $user, array $data): FuelOrder
+    {
+        try {
+            DB::beginTransaction();
+
+            $vehicle = $user->vehicles()->find($data['vehicle_id']);
+            if (!$vehicle) {
+                throw new \Exception('المركبة غير موجودة');
+            }
+
+            $city = $data['city'] ?? $this->getCityFromCoordinates(
+                $data['delivery_latitude'],
+                $data['delivery_longitude']
+            );
+
+            $order = $this->repository->createForUser($user, [
+                'vehicle_id' => $data['vehicle_id'],
+                'fuel_type' => $data['fuel_type'],
+                'amount' => $data['amount'],
+                'delivery_latitude' => $data['delivery_latitude'],
+                'delivery_longitude' => $data['delivery_longitude'],
+                'delivery_address' => $data['delivery_address'] ?? $city,
+                'city' => $city,
+                'notes' => $data['notes'] ?? null,
+                'status' => 'pending',
+            ]);
+
+            $nearbyProviders = $this->getNearbyFuelProviders(
+                $data['delivery_latitude'],
+                $data['delivery_longitude'],
+                30
+            );
+
+            $providersNotified = [];
+
+            if ($nearbyProviders->isNotEmpty()) {
+                foreach ($nearbyProviders as $provider) {
+                    broadcast(new NewEmergencyFuelOrder($order, $provider, $provider->distance));
+                    $providersNotified[] = $provider->id;
+                }
+
+                Log::info('Fuel order: ' . $nearbyProviders->count() . ' nearby providers notified', [
+                    'order_id' => $order->id,
+                    'providers' => $providersNotified
+                ]);
+            } else {
+                $cityProviders = $this->getFuelProvidersByCity($city);
+
+                if ($cityProviders->isNotEmpty()) {
+                    foreach ($cityProviders as $provider) {
+                        broadcast(new NewEmergencyFuelOrder($order, $provider, null));
+                        $providersNotified[] = $provider->id;
+                    }
+
+                    Log::info('Fuel order: ' . $cityProviders->count() . ' city providers notified', [
+                        'order_id' => $order->id,
+                        'city' => $city,
+                        'providers' => $providersNotified
+                    ]);
+                } else {
+                    Log::warning('Fuel order: no providers found (neither nearby nor in same city)', [
+                        'order_id' => $order->id,
+                        'city' => $city,
+                        'lat' => $data['delivery_latitude'],
+                        'lng' => $data['delivery_longitude']
+                    ]);
+                }
+            }
+
+            DB::commit();
+            return $order->load(['vehicle']);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
+        }
+    }
+
+
+    protected function getNearbyFuelProviders(float $lat, float $lng, int $radiusInKm = 30)
+    {
+        $haversine = "(6371 * acos(cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude))))";
+
+        return FuelProvider::where('is_available', true)
+            ->where('is_verified', true)
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->selectRaw("*, {$haversine} AS distance", [$lat, $lng, $lat])
+            ->having('distance', '<=', $radiusInKm)
+            ->orderBy('distance')
+            ->get()
+            ->map(function ($provider) {
+                $provider->distance = round($provider->distance, 2);
+                return $provider;
+            });
+    }
+
+    protected function getFuelProvidersByCity(?string $city)
+    {
+        if (!$city) {
+            return collect();
+        }
+
+        return FuelProvider::where('is_available', true)
+            ->where('is_verified', true)
+            ->where('city', $city)
+            ->get()
+            ->map(function ($provider) {
+                $provider->distance = null;
+                return $provider;
+            });
+    }
+
+
+    private function getCityFromCoordinates(float $lat, float $lng): ?string
+    {
+        try {
+            $response = Http::timeout(5)->get("https://nominatim.openstreetmap.org/reverse", [
+                'lat' => $lat,
+                'lon' => $lng,
+                'format' => 'json',
+                'addressdetails' => 1,
+            ]);
+
+            $data = $response->json();
+
+            return $data['address']['city'] ??
+                $data['address']['town'] ??
+                $data['address']['village'] ??
+                $data['address']['state'] ?? null;
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 }

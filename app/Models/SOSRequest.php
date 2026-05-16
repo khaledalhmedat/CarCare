@@ -18,6 +18,8 @@ class SosRequest extends Model
         'accepted_at',
         'completed_at',
         'cancellation_reason',
+        'city',
+
     ];
 
     protected $casts = [
