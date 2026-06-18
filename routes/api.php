@@ -15,6 +15,11 @@ use App\Http\Controllers\TechnicianSos\TechnicianSosController;
 use App\Http\Controllers\Tracking\TrackingController;
 use App\Http\Controllers\FuelProvider\FuelProviderController;
 use App\Http\Controllers\FuelProviderOrder\FuelProviderOrderController;
+use App\Http\Controllers\CustomerShop\CustomerShopController;
+use App\Http\Controllers\CustomerOrder\CustomerOrderController;
+use App\Http\Controllers\Shop\ShopController;
+
+
 
 
 
@@ -238,4 +243,43 @@ Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
     Route::post('/fuel_orders/emergency', [FuelOrderController::class, 'emergency']);
 
     Route::get('/fuel_orders/{id}/track', [FuelOrderController::class, 'trackProvider']);
+});
+
+
+
+
+// routes/api.php
+
+Route::middleware(['auth:sanctum'])->prefix('shop')->group(function () {
+    Route::get('/profile', [ShopController::class, 'profile']);
+    Route::post('/profile', [ShopController::class, 'storeOrUpdateProfile']);
+    Route::put('/profile', [ShopController::class, 'storeOrUpdateProfile']);
+    
+    Route::get('/products', [ShopController::class, 'products']);
+    Route::post('/products', [ShopController::class, 'storeProduct']);
+    Route::put('/products/{id}', [ShopController::class, 'updateProduct']);
+    Route::delete('/products/{id}', [ShopController::class, 'deleteProduct']);
+});
+
+
+
+// routes/api.php
+
+Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
+    
+    Route::get('/shops', [CustomerShopController::class, 'shops']);
+    Route::get('/shops/{id}', [CustomerShopController::class, 'shopDetails']);
+    Route::get('/shops/{id}/products', [CustomerShopController::class, 'shopProducts']);
+    Route::get('/products', [CustomerShopController::class, 'products']);
+    Route::get('/products/{id}', [CustomerShopController::class, 'productDetails']);
+    
+    Route::get('/cart', [CustomerOrderController::class, 'cart']);
+    Route::post('/cart', [CustomerOrderController::class, 'addToCart']);
+    Route::put('/cart/{id}', [CustomerOrderController::class, 'updateCart']);
+    Route::delete('/cart/{id}', [CustomerOrderController::class, 'removeFromCart']);
+    
+    Route::post('/orders', [CustomerOrderController::class, 'createOrder']);
+    Route::get('/orders', [CustomerOrderController::class, 'orders']);
+    Route::get('/orders/{id}', [CustomerOrderController::class, 'orderDetails']);
+    Route::post('/orders/{id}/cancel', [CustomerOrderController::class, 'cancelOrder']);
 });

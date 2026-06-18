@@ -64,6 +64,14 @@ return [
                 // Guzzle client options: https://docs.guzzlephp.org/en/stable/request-options.html
             ],
         ],
+       'options' => [
+    'host' => env('PUSHER_HOST', '127.0.0.1'),
+    'port' => env('PUSHER_PORT', 8080),
+    'scheme' => env('PUSHER_SCHEME', 'http'),
+    'encrypted' => false,        // ← غيّر لـ false
+    'useTLS' => false,
+    'cluster' => env('PUSHER_APP_CLUSTER', 'mt1'),
+],
 
         'ably' => [
             'driver' => 'ably',

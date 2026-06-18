@@ -1,0 +1,30 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('tracking_points', function (Blueprint $table) {
+            if (Schema::hasColumn('tracking_points', 'live_tracking_session_id')) {
+                $table->foreignId('live_tracking_session_id')
+                    ->nullable()
+                    ->change();
+            }
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('tracking_points', function (Blueprint $table) {
+            if (Schema::hasColumn('tracking_points', 'live_tracking_session_id')) {
+                $table->foreignId('live_tracking_session_id')
+                    ->nullable(false)
+                    ->change();
+            }
+        });
+    }
+};

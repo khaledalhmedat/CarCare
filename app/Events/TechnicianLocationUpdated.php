@@ -12,6 +12,8 @@ class TechnicianLocationUpdated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
+    public bool $afterCommit = true;
+
     public function __construct(
         public int $sosRequestId,
         public int $technicianId,

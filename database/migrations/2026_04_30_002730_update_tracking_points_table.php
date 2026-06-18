@@ -9,16 +9,35 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('tracking_points', function (Blueprint $table) {
-            $table->foreignId('technician_id')->after('sos_request_id')->constrained('users')->cascadeOnDelete();
-            $table->string('heading')->nullable()->after('lng');
-            $table->float('speed')->nullable()->after('heading');
+            if (Schema::hasColumn('tracking_points', 'technician_id')) {
+                $table->dropForeign(['technician_id']);
+            }
+
+            if (Schema::hasColumn('tracking_points', 'technician_id')) {
+                $table->foreignId('technician_id')->nullable()->change();
+            }
+
+            if (Schema::hasColumn('tracking_points', 'heading')) {
+                $table->dropColumn('heading');
+            }
+            if (Schema::hasColumn('tracking_points', 'speed')) {
+                $table->dropColumn('speed');
+            }
         });
     }
 
     public function down(): void
     {
         Schema::table('tracking_points', function (Blueprint $table) {
-            $table->dropColumn(['technician_id', 'heading', 'speed']);
+            if (! Schema::hasColumn('tracking_points', 'technician_id')) {
+                $table->foreignId('technician_id')->constrained('users')->cascadeOnDelete();
+            }
+            if (! Schema::hasColumn('tracking_points', 'heading')) {
+                $table->string('heading')->nullable();
+            }
+            if (! Schema::hasColumn('tracking_points', 'speed')) {
+                $table->float('speed')->nullable();
+            }
         });
     }
 };

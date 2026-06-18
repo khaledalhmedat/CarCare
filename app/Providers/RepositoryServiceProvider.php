@@ -21,7 +21,11 @@ use App\Repositories\Implementation\VehicleRepository;
 use App\Services\MaintenanceRequestService;
 use App\Services\VehicleService;
 use App\Models\User;
+use App\Repositories\Contracts\CustomerShopRepositoryInterface;
+use App\Repositories\Contracts\ShopRepositoryInterface;
 use App\Repositories\Contracts\SosRepositoryInterface;
+use App\Repositories\Implementation\CustomerShopRepository;
+use App\Repositories\Implementation\ShopRepository;
 use App\Repositories\Implementation\SosRepository;
 
 class RepositoryServiceProvider extends ServiceProvider
@@ -76,6 +80,18 @@ class RepositoryServiceProvider extends ServiceProvider
             SosRepositoryInterface::class,
             SosRepository::class
         );
+
+        $this->app->bind(
+            ShopRepositoryInterface::class,
+            ShopRepository::class
+        );
+
+        $this->app->bind(
+            CustomerShopRepositoryInterface::class,
+            CustomerShopRepository::class
+        );
+
+        
 
     }
 

@@ -137,4 +137,15 @@ class User extends Authenticatable
     {
         return $this->hasMany(SosRequest::class);
     }
+
+     public function cart()
+    {
+        return $this->hasMany(Cart::class);
+    }
+
+    
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
+    }
 }

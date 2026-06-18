@@ -9,19 +9,42 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('sos_requests', function (Blueprint $table) {
-            $table->text('description')->nullable()->after('lng');
-            $table->foreignId('technician_id')->nullable()->after('user_id')->constrained('users')->nullOnDelete();
-            $table->string('priority')->default('emergency')->after('status');
-            $table->timestamp('accepted_at')->nullable()->after('status');
-            $table->timestamp('completed_at')->nullable()->after('accepted_at');
-            $table->text('cancellation_reason')->nullable()->after('completed_at');
+            if (Schema::hasColumn('sos_requests', 'technician_id')) {
+                $table->dropForeign(['technician_id']);
+            }
+            
+            if (Schema::hasColumn('sos_requests', 'technician_id')) {
+                $table->foreignId('technician_id')->nullable()->change();
+            }
+            
+            if (!Schema::hasColumn('sos_requests', 'description')) {
+                $table->text('description')->nullable();
+            }
+            if (!Schema::hasColumn('sos_requests', 'priority')) {
+                $table->string('priority')->default('emergency');
+            }
+            if (!Schema::hasColumn('sos_requests', 'accepted_at')) {
+                $table->timestamp('accepted_at')->nullable();
+            }
+            if (!Schema::hasColumn('sos_requests', 'completed_at')) {
+                $table->timestamp('completed_at')->nullable();
+            }
+            if (!Schema::hasColumn('sos_requests', 'cancellation_reason')) {
+                $table->text('cancellation_reason')->nullable();
+            }
         });
     }
 
     public function down(): void
     {
         Schema::table('sos_requests', function (Blueprint $table) {
-            $table->dropColumn(['description', 'technician_id', 'priority', 'accepted_at', 'completed_at', 'cancellation_reason']);
+            $table->dropColumn([
+                'description',
+                'priority',
+                'accepted_at',
+                'completed_at',
+                'cancellation_reason'
+            ]);
         });
     }
 };
