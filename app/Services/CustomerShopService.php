@@ -182,4 +182,40 @@ class CustomerShopService
 
         return $this->repository->cancelOrder($order, $reason);
     }
+
+    /**
+ * تتبع موقع التوصيل (للمستخدم)
+ */
+public function getDeliveryTracking(User $user, int $orderId)
+{
+    $order = Order::with(['deliveryTrackingPoints', 'shop'])
+        ->where('user_id', $user->id)
+        ->find($orderId);
+    
+    if (!$order) {
+        throw new \Exception('الطلب غير موجود');
+    }
+
+    if (!in_array($order->status, ['out_for_delivery', 'delivered'])) {
+        throw new \Exception('الطلب لم يخرج للتوصيل بعد');
+    }
+
+    $points = $order->deliveryTrackingPoints()->orderBy('created_at', 'asc')->get();
+    $lastLocation = $points->last();
+
+    return [
+        'order_id' => $order->id,
+        'order_status' => $order->status,
+        'tracking_points' => $points->map(fn($p) => [
+            'latitude' => $p->latitude,
+            'longitude' => $p->longitude,
+            'timestamp' => $p->created_at->toDateTimeString(),
+        ]),
+        'last_location' => $lastLocation ? [
+            'latitude' => $lastLocation->latitude,
+            'longitude' => $lastLocation->longitude,
+            'timestamp' => $lastLocation->created_at->toDateTimeString(),
+        ] : null,
+    ];
+}
 }

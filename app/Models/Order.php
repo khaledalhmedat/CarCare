@@ -61,4 +61,9 @@ class Order extends Model
     {
         return in_array($this->status, ['pending', 'accepted']);
     }
+
+    public function deliveryTrackingPoints()
+{
+    return $this->hasMany(DeliveryTrackingPoint::class);
+}
 }

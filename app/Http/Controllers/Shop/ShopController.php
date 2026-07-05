@@ -8,9 +8,12 @@ use App\Http\Requests\Shop\UpdateShopRequest;
 use App\Http\Requests\Shop\StoreProductRequest;
 use App\Http\Requests\Shop\UpdateProductRequest;
 use App\Http\Resources\ShopResource;
+use App\Http\Resources\OrderResource;
 use App\Http\Resources\ProductResource;
 use App\Services\ShopService;
 use Illuminate\Http\Request;
+use App\Http\Requests\Shop\UpdateOrderStatusRequest;
+use App\Http\Requests\Shop\ShareDeliveryLocationRequest;
 
 class ShopController extends Controller
 {
@@ -114,4 +117,120 @@ class ShopController extends Controller
             'message' => 'تم حذف المنتج بنجاح'
         ]);
     }
+
+    /**
+ * عرض الطلبيات الواردة
+ */
+public function orders(Request $request)
+{
+    $orders = $this->shopService->getShopOrders($request->user(), $request->status);
+    
+    return response()->json([
+        'success' => true,
+        'data' => OrderResource::collection($orders),
+        'meta' => [
+            'total' => $orders->total(),
+            'per_page' => $orders->perPage(),
+            'current_page' => $orders->currentPage(),
+        ]
+    ]);
+}
+
+/**
+ * عرض تفاصيل طلبية واردة
+ */
+public function orderDetails(Request $request, int $id)
+{
+    $order = $this->shopService->getShopOrder($request->user(), $id);
+    
+    return response()->json([
+        'success' => true,
+        'data' => new OrderResource($order)
+    ]);
+}
+
+/**
+ * قبول طلبية
+ */
+public function acceptOrder(Request $request, int $id)
+{
+    $order = $this->shopService->acceptOrder($request->user(), $id);
+    
+    return response()->json([
+        'success' => true,
+        'message' => 'تم قبول الطلبية بنجاح',
+        'data' => new OrderResource($order)
+    ]);
+}
+
+/**
+ * رفض طلبية
+ */
+public function rejectOrder(Request $request, int $id)
+{
+    $request->validate(['reason' => 'required|string|min:5']);
+    
+    $order = $this->shopService->rejectOrder($request->user(), $id, $request->reason);
+    
+    return response()->json([
+        'success' => true,
+        'message' => 'تم رفض الطلبية',
+        'data' => new OrderResource($order)
+    ]);
+}
+
+/**
+ * تحديث حالة الطلبية (processing, out_for_delivery, delivered)
+ */
+public function updateOrderStatus(UpdateOrderStatusRequest $request, int $id)
+{
+    $order = $this->shopService->updateOrderStatus(
+        $request->user(),
+        $id,
+        $request->status,
+        $request->notes
+    );
+    
+    return response()->json([
+        'success' => true,
+        'message' => 'تم تحديث حالة الطلبية بنجاح',
+        'data' => new OrderResource($order)
+    ]);
+}
+
+/**
+ * مشاركة موقع المندوب
+ */
+public function shareDeliveryLocation(ShareDeliveryLocationRequest $request, int $id)
+{
+    $point = $this->shopService->shareDeliveryLocation(
+        $request->user(),
+        $id,
+        $request->latitude,
+        $request->longitude
+    );
+    
+    return response()->json([
+        'success' => true,
+        'message' => 'تم مشاركة الموقع',
+        'data' => [
+            'latitude' => $point->latitude,
+            'longitude' => $point->longitude,
+            'timestamp' => $point->created_at->toDateTimeString(),
+        ]
+    ]);
+}
+
+/**
+ * تتبع موقع التوصيل (للمستخدم)
+ */
+public function trackDelivery(Request $request, int $id)
+{
+    $tracking = $this->shopService->getDeliveryTracking($request->user(), $id);
+    
+    return response()->json([
+        'success' => true,
+        'data' => $tracking
+    ]);
+}
 }

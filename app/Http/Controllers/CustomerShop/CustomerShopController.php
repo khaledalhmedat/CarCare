@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\ShopResource;
 use App\Http\Resources\ProductResource;
 use App\Services\CustomerShopService;
+use App\Services\ShopService;
+
 use Illuminate\Http\Request;
 
 class CustomerShopController extends Controller
@@ -76,4 +78,17 @@ class CustomerShopController extends Controller
             'data' => new ProductResource($product)
         ]);
     }
+
+    /**
+ * تتبع موقع التوصيل (للمستخدم)
+ */
+public function trackDelivery(Request $request, int $id)
+{
+    $tracking = $this->shopService->getDeliveryTracking($request->user(), $id);
+    
+    return response()->json([
+        'success' => true,
+        'data' => $tracking
+    ]);
+}
 }

@@ -1,33 +1,23 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthController;
-use App\Http\Controllers\Profile\ProfileController;
-use App\Http\Controllers\Vehicle\VehicleController;
-use App\Http\Controllers\MaintenanceRequest\MaintenanceRequestController;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Technician\TechnicianController;
-use App\Http\Controllers\Technician\TechnicianMaintenanceController;
-use App\Http\Controllers\FuelOrder\FuelOrderController;
 use App\Http\Controllers\CarwashBooking\CarwashBookingController;
 use App\Http\Controllers\CarWasher\CarWasherController;
-use App\Http\Controllers\Sos\SosController;
-use App\Http\Controllers\TechnicianSos\TechnicianSosController;
-use App\Http\Controllers\Tracking\TrackingController;
+use App\Http\Controllers\CustomerOrder\CustomerOrderController;
+use App\Http\Controllers\CustomerShop\CustomerShopController;
+use App\Http\Controllers\FuelOrder\FuelOrderController;
 use App\Http\Controllers\FuelProvider\FuelProviderController;
 use App\Http\Controllers\FuelProviderOrder\FuelProviderOrderController;
-use App\Http\Controllers\CustomerShop\CustomerShopController;
-use App\Http\Controllers\CustomerOrder\CustomerOrderController;
+use App\Http\Controllers\MaintenanceRequest\MaintenanceRequestController;
+use App\Http\Controllers\Profile\ProfileController;
 use App\Http\Controllers\Shop\ShopController;
-
-
-
-
-
-
-
-
-
-
+use App\Http\Controllers\Sos\SosController;
+use App\Http\Controllers\Technician\TechnicianController;
+use App\Http\Controllers\Technician\TechnicianMaintenanceController;
+use App\Http\Controllers\TechnicianSos\TechnicianSosController;
+use App\Http\Controllers\Tracking\TrackingController;
+use App\Http\Controllers\Vehicle\VehicleController;
+use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
@@ -48,7 +38,6 @@ Route::prefix('profile')->middleware('auth:sanctum')->group(function () {
     Route::delete('/', [ProfileController::class, 'deleteAccount']);
 });
 
-
 Route::prefix('vehicles')->middleware('auth:sanctum')->group(function () {
     Route::get('/', [VehicleController::class, 'index']);
     Route::post('/', [VehicleController::class, 'store']);
@@ -61,11 +50,9 @@ Route::prefix('vehicles')->middleware('auth:sanctum')->group(function () {
     Route::get('/{id}/alerts', [VehicleController::class, 'alerts']);
 });
 
-
 Route::prefix('maintenance-requests')->middleware('auth:sanctum')->group(function () {
 
     Route::get('/statistics', [MaintenanceRequestController::class, 'statistics']);
-
 
     Route::get('/', [MaintenanceRequestController::class, 'index']);
     Route::post('/', [MaintenanceRequestController::class, 'store']);
@@ -79,7 +66,6 @@ Route::prefix('maintenance-requests')->middleware('auth:sanctum')->group(functio
 
     Route::post('/{id}/cancel', [MaintenanceRequestController::class, 'cancel']);
     Route::post('/{id}/accept-quotation/{quotationId}', [MaintenanceRequestController::class, 'acceptQuotation']);
-
 
     Route::get('/{id}/quotations', [MaintenanceRequestController::class, 'quotations']);
 
@@ -98,7 +84,6 @@ Route::prefix('technician')->middleware('auth:sanctum')->group(function () {
 
     Route::get('/statistics', [TechnicianMaintenanceController::class, 'statistics']);
 
-
     Route::get('/profile', [TechnicianController::class, 'profile']);
     Route::post('/profile', [TechnicianController::class, 'updateProfile']);
     Route::put('/profile', [TechnicianController::class, 'updateProfile']);
@@ -114,7 +99,6 @@ Route::prefix('technician')->middleware('auth:sanctum')->group(function () {
 
     Route::get('/my-jobs/completed', [TechnicianMaintenanceController::class, 'myCompletedJobs']);
 
-
     Route::get('/jobs/{id}', [TechnicianMaintenanceController::class, 'showJob']);
 
     Route::post('/jobs/{id}/report', [TechnicianMaintenanceController::class, 'addMaintenanceReport']);
@@ -124,11 +108,6 @@ Route::prefix('debug')->middleware('auth:sanctum')->group(function () {
     Route::get('/technician-jobs', [TechnicianMaintenanceController::class, 'debugJobs']);
     Route::get('/technician-all-jobs', [TechnicianMaintenanceController::class, 'allMyJobs']);
 });
-
-
-
-
-
 
 Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
 
@@ -151,7 +130,6 @@ Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
 
 Route::middleware(['auth:sanctum'])->prefix('car_washer')->group(function () {
 
-
     Route::get('/statistics', [CarWasherController::class, 'statistics']);
 
     Route::get('/my_profile', [CarWasherController::class, 'myProfile']);
@@ -169,17 +147,12 @@ Route::middleware(['auth:sanctum'])->prefix('car_washer')->group(function () {
     Route::patch('/availability', [CarWasherController::class, 'updateAvailability']);
 });
 
-
-
 Route::middleware('auth:sanctum')->prefix('sos')->group(function () {
     Route::get('/', [SosController::class, 'index']);
     Route::post('/', [SosController::class, 'store']);
     Route::get('/{id}', [SosController::class, 'show']);
     Route::post('/{id}/cancel', [SosController::class, 'cancel']);
 });
-
-
-
 
 Route::middleware(['auth:sanctum'])->prefix('technician/sos')->group(function () {
 
@@ -198,8 +171,6 @@ Route::middleware(['auth:sanctum'])->prefix('technician/sos')->group(function ()
     Route::post('/requests/{id}/cancel', [TechnicianSosController::class, 'cancelRequest']);
 });
 
-
-
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/sos/{id}/location', [TrackingController::class, 'shareLocation']);
 });
@@ -208,11 +179,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/sos/{id}/track', [TrackingController::class, 'trackTechnician']);
 });
 
-
 Route::middleware(['auth:sanctum'])->prefix('technician')->group(function () {
     Route::post('/location', [TechnicianController::class, 'updateLocation']);
 });
-
 
 // routes/api.php
 
@@ -233,7 +202,6 @@ Route::middleware(['auth:sanctum'])->prefix('fuel_provider')->group(function () 
     Route::get('/my_orders', [FuelProviderOrderController::class, 'myOrders']);
 });
 
-
 Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
 
     Route::get('/fuel_orders', [FuelOrderController::class, 'index']);
@@ -245,41 +213,46 @@ Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
     Route::get('/fuel_orders/{id}/track', [FuelOrderController::class, 'trackProvider']);
 });
 
-
-
-
 // routes/api.php
 
 Route::middleware(['auth:sanctum'])->prefix('shop')->group(function () {
     Route::get('/profile', [ShopController::class, 'profile']);
     Route::post('/profile', [ShopController::class, 'storeOrUpdateProfile']);
     Route::put('/profile', [ShopController::class, 'storeOrUpdateProfile']);
-    
+
     Route::get('/products', [ShopController::class, 'products']);
     Route::post('/products', [ShopController::class, 'storeProduct']);
     Route::put('/products/{id}', [ShopController::class, 'updateProduct']);
     Route::delete('/products/{id}', [ShopController::class, 'deleteProduct']);
+
+    Route::get('/orders', [ShopController::class, 'orders']);
+    Route::get('/orders/{id}', [ShopController::class, 'orderDetails']);
+    Route::post('/orders/{id}/accept', [ShopController::class, 'acceptOrder']);
+    Route::post('/orders/{id}/reject', [ShopController::class, 'rejectOrder']);
+    Route::post('/orders/{id}/status', [ShopController::class, 'updateOrderStatus']);
+    Route::post('/orders/{id}/location', [ShopController::class, 'shareDeliveryLocation']);
 });
-
-
 
 // routes/api.php
 
 Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
-    
+
     Route::get('/shops', [CustomerShopController::class, 'shops']);
     Route::get('/shops/{id}', [CustomerShopController::class, 'shopDetails']);
     Route::get('/shops/{id}/products', [CustomerShopController::class, 'shopProducts']);
     Route::get('/products', [CustomerShopController::class, 'products']);
     Route::get('/products/{id}', [CustomerShopController::class, 'productDetails']);
-    
+
     Route::get('/cart', [CustomerOrderController::class, 'cart']);
     Route::post('/cart', [CustomerOrderController::class, 'addToCart']);
     Route::put('/cart/{id}', [CustomerOrderController::class, 'updateCart']);
     Route::delete('/cart/{id}', [CustomerOrderController::class, 'removeFromCart']);
-    
+
     Route::post('/orders', [CustomerOrderController::class, 'createOrder']);
     Route::get('/orders', [CustomerOrderController::class, 'orders']);
     Route::get('/orders/{id}', [CustomerOrderController::class, 'orderDetails']);
     Route::post('/orders/{id}/cancel', [CustomerOrderController::class, 'cancelOrder']);
+
+    Route::get('/orders/{id}/track', [ShopController::class, 'trackDelivery']);
+
 });
