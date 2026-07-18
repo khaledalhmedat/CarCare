@@ -1,0 +1,86 @@
+name: carcarex
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: carcarex-mysql
+    restart: always
+    ports:
+      - "3310:3306"
+    volumes:
+      - carcarex_mysql_data:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: KtIA720dU2UAfvk2W9do
+      MYSQL_DATABASE: carcarex
+      MYSQL_USER: carcarex
+      MYSQL_PASSWORD: KtIA720dU2UAfvk2W9do
+    networks:
+      - shared_db_net
+
+  app:
+    image: carcarex:latest
+    container_name: carcarex-app
+    restart: always
+    depends_on:
+      mysql:
+        condition: service_started
+    ports:
+      - "8013:9000"
+    volumes:
+      - /opt/carcarex/storage:/var/www/html/storage
+      - /opt/carcarex/bootstrap/cache:/var/www/html/bootstrap/cache
+    env_file:
+      - .env
+    environment:
+      - CONTAINER_ROLE=app
+    networks:
+      - shared_db_net
+
+  queue-worker:
+    image: carcarex:latest
+    container_name: carcarex-queue
+    restart: always
+    command:
+      [
+        "php",
+        "artisan",
+        "queue:work",
+        "--queue=default",
+        "--tries=3",
+        "--timeout=90",
+      ]
+    volumes:
+      - /opt/carcarex/storage:/var/www/html/storage
+    env_file:
+      - .env
+    environment:
+      - CONTAINER_ROLE=queue
+    networks:
+      - shared_db_net
+
+  scheduler:
+    image: carcarex:latest
+    container_name: carcarex-scheduler
+    restart: always
+    command:
+      [
+        "sh",
+        "-c",
+        "while true; do php artisan schedule:run --verbose --no-interaction & sleep 60; done"
+      ]
+    volumes:
+      - /opt/carcarex/storage:/var/www/html/storage
+    env_file:
+      - .env
+    environment:
+      - CONTAINER_ROLE=scheduler
+    networks:
+      - shared_db_net
+
+volumes:
+  carcarex_mysql_data:
+
+networks:
+  shared_db_net:
+    external: true
+    name: central_network

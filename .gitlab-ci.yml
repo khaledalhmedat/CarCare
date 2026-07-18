@@ -1,0 +1,40 @@
+variables:
+  PROJECT_NAME: "carcarex"
+  DEPLOY_PATH: "/opt/carcarex"
+  IMAGE_NAME: "carcarex"
+
+stages:
+  - build
+  - deploy
+
+build:
+  stage: build
+  tags:
+    - server213
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  script:
+    - docker build -t ${IMAGE_NAME}:latest .
+
+deploy:
+  stage: deploy
+  tags:
+    - server213
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  script:
+    - mkdir -p ${DEPLOY_PATH}
+    - mkdir -p ${DEPLOY_PATH}/storage/framework/cache
+    - mkdir -p ${DEPLOY_PATH}/storage/framework/sessions
+    - mkdir -p ${DEPLOY_PATH}/storage/framework/views
+    - mkdir -p ${DEPLOY_PATH}/storage/logs
+    - mkdir -p ${DEPLOY_PATH}/storage/app
+    - mkdir -p ${DEPLOY_PATH}/bootstrap/cache
+
+    - cp docker-compose.yml ${DEPLOY_PATH}/docker-compose.yml
+    - cd ${DEPLOY_PATH}
+
+    - printf "%b" "$ENV_FILE" > .env
+
+    - docker compose up -d --build --force-recreate --remove-orphans
+    - docker image prune -f
