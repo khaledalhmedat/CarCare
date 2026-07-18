@@ -34,7 +34,7 @@ class CarWasherService
                 $carWasher = $this->repository->createForUser($user, $data);
 
                 $role = Role::where('slug', 'car-washer')->first();
-                if ($role) {
+                if ($role && !$user->hasRole('car-washer')) {
                     $user->roles()->attach($role->id);
                 }
             }

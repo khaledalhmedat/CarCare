@@ -82,26 +82,29 @@ Route::post('/rate-job/{jobId}', [MaintenanceRequestController::class, 'rateServ
 
 Route::prefix('technician')->middleware('auth:sanctum')->group(function () {
 
-    Route::get('/statistics', [TechnicianMaintenanceController::class, 'statistics']);
-
     Route::get('/profile', [TechnicianController::class, 'profile']);
     Route::post('/profile', [TechnicianController::class, 'updateProfile']);
     Route::put('/profile', [TechnicianController::class, 'updateProfile']);
-    Route::patch('/availability', [TechnicianController::class, 'updateAvailability']);
 
-    Route::get('/available-requests', [TechnicianMaintenanceController::class, 'availableRequests']);
-    Route::get('/requests/{id}', [TechnicianMaintenanceController::class, 'showRequest']);
-    Route::post('/requests/{id}/quotation', [TechnicianMaintenanceController::class, 'submitQuotation']);
+    Route::middleware('role:technician')->group(function () {
+        Route::get('/statistics', [TechnicianMaintenanceController::class, 'statistics']);
 
-    Route::get('/my-jobs', [TechnicianMaintenanceController::class, 'myJobs']);
-    Route::get('/my-jobs/accepted', [TechnicianMaintenanceController::class, 'myAcceptedJobs']);
-    Route::patch('/jobs/{id}/status', [TechnicianMaintenanceController::class, 'updateJobStatus']);
+        Route::patch('/availability', [TechnicianController::class, 'updateAvailability']);
 
-    Route::get('/my-jobs/completed', [TechnicianMaintenanceController::class, 'myCompletedJobs']);
+        Route::get('/available-requests', [TechnicianMaintenanceController::class, 'availableRequests']);
+        Route::get('/requests/{id}', [TechnicianMaintenanceController::class, 'showRequest']);
+        Route::post('/requests/{id}/quotation', [TechnicianMaintenanceController::class, 'submitQuotation']);
 
-    Route::get('/jobs/{id}', [TechnicianMaintenanceController::class, 'showJob']);
+        Route::get('/my-jobs', [TechnicianMaintenanceController::class, 'myJobs']);
+        Route::get('/my-jobs/accepted', [TechnicianMaintenanceController::class, 'myAcceptedJobs']);
+        Route::patch('/jobs/{id}/status', [TechnicianMaintenanceController::class, 'updateJobStatus']);
 
-    Route::post('/jobs/{id}/report', [TechnicianMaintenanceController::class, 'addMaintenanceReport']);
+        Route::get('/my-jobs/completed', [TechnicianMaintenanceController::class, 'myCompletedJobs']);
+
+        Route::get('/jobs/{id}', [TechnicianMaintenanceController::class, 'showJob']);
+
+        Route::post('/jobs/{id}/report', [TechnicianMaintenanceController::class, 'addMaintenanceReport']);
+    });
 });
 
 Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
@@ -125,21 +128,22 @@ Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
 
 Route::middleware(['auth:sanctum'])->prefix('car_washer')->group(function () {
 
-    Route::get('/statistics', [CarWasherController::class, 'statistics']);
-
     Route::get('/my_profile', [CarWasherController::class, 'myProfile']);
-
     Route::post('/profile', [CarWasherController::class, 'storeOrUpdateProfile']);
 
-    Route::post('/profile/logo', [CarWasherController::class, 'uploadLogo']);
-    Route::delete('/profile/logo', [CarWasherController::class, 'deleteLogo']);
+    Route::middleware('role:car-washer')->group(function () {
+        Route::get('/statistics', [CarWasherController::class, 'statistics']);
 
-    Route::get('/my_bookings', [CarWasherController::class, 'myBookings']);
-    Route::post('/bookings/{id}/accept', [CarWasherController::class, 'acceptBooking']);
-    Route::post('/bookings/{id}/reject', [CarWasherController::class, 'rejectBooking']);
-    Route::patch('/bookings/{id}/status', [CarWasherController::class, 'updateBookingStatus']);
+        Route::post('/profile/logo', [CarWasherController::class, 'uploadLogo']);
+        Route::delete('/profile/logo', [CarWasherController::class, 'deleteLogo']);
 
-    Route::patch('/availability', [CarWasherController::class, 'updateAvailability']);
+        Route::get('/my_bookings', [CarWasherController::class, 'myBookings']);
+        Route::post('/bookings/{id}/accept', [CarWasherController::class, 'acceptBooking']);
+        Route::post('/bookings/{id}/reject', [CarWasherController::class, 'rejectBooking']);
+        Route::patch('/bookings/{id}/status', [CarWasherController::class, 'updateBookingStatus']);
+
+        Route::patch('/availability', [CarWasherController::class, 'updateAvailability']);
+    });
 });
 
 Route::middleware('auth:sanctum')->prefix('sos')->group(function () {
@@ -149,7 +153,7 @@ Route::middleware('auth:sanctum')->prefix('sos')->group(function () {
     Route::post('/{id}/cancel', [SosController::class, 'cancel']);
 });
 
-Route::middleware(['auth:sanctum'])->prefix('technician/sos')->group(function () {
+Route::middleware(['auth:sanctum', 'role:technician'])->prefix('technician/sos')->group(function () {
 
     Route::get('/available', [TechnicianSosController::class, 'availableRequests']);
 
@@ -166,7 +170,7 @@ Route::middleware(['auth:sanctum'])->prefix('technician/sos')->group(function ()
     Route::post('/requests/{id}/cancel', [TechnicianSosController::class, 'cancelRequest']);
 });
 
-Route::middleware(['auth:sanctum'])->group(function () {
+Route::middleware(['auth:sanctum', 'role:technician'])->group(function () {
     Route::post('/sos/{id}/location', [TrackingController::class, 'shareLocation']);
 });
 
@@ -174,7 +178,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/sos/{id}/track', [TrackingController::class, 'trackTechnician']);
 });
 
-Route::middleware(['auth:sanctum'])->prefix('technician')->group(function () {
+Route::middleware(['auth:sanctum', 'role:technician'])->prefix('technician')->group(function () {
     Route::post('/location', [TechnicianController::class, 'updateLocation']);
 });
 
@@ -184,17 +188,20 @@ Route::middleware(['auth:sanctum'])->prefix('fuel_provider')->group(function () 
     Route::get('/my_profile', [FuelProviderController::class, 'myProfile']);
     Route::post('/profile', [FuelProviderController::class, 'storeOrUpdateProfile']);
     Route::put('/profile', [FuelProviderController::class, 'storeOrUpdateProfile']);
-    Route::patch('/availability', [FuelProviderController::class, 'updateAvailability']);
-    Route::post('/prices', [FuelProviderController::class, 'updatePrices']);
-    Route::get('/statistics', [FuelProviderController::class, 'statistics']);
 
-    Route::get('/available_orders', [FuelProviderOrderController::class, 'availableOrders']);
-    Route::get('/orders/{id}', [FuelProviderOrderController::class, 'showOrder']);
-    Route::post('/orders/{id}/accept', [FuelProviderOrderController::class, 'acceptOrder']);
-    Route::post('/orders/{id}/location', [FuelProviderOrderController::class, 'shareLocation']);
-    Route::patch('/orders/{id}/status', [FuelProviderOrderController::class, 'updateOrderStatus']);
-    Route::post('/orders/{id}/cancel', [FuelProviderOrderController::class, 'cancelOrder']);
-    Route::get('/my_orders', [FuelProviderOrderController::class, 'myOrders']);
+    Route::middleware('role:fuel-provider')->group(function () {
+        Route::patch('/availability', [FuelProviderController::class, 'updateAvailability']);
+        Route::post('/prices', [FuelProviderController::class, 'updatePrices']);
+        Route::get('/statistics', [FuelProviderController::class, 'statistics']);
+
+        Route::get('/available_orders', [FuelProviderOrderController::class, 'availableOrders']);
+        Route::get('/orders/{id}', [FuelProviderOrderController::class, 'showOrder']);
+        Route::post('/orders/{id}/accept', [FuelProviderOrderController::class, 'acceptOrder']);
+        Route::post('/orders/{id}/location', [FuelProviderOrderController::class, 'shareLocation']);
+        Route::patch('/orders/{id}/status', [FuelProviderOrderController::class, 'updateOrderStatus']);
+        Route::post('/orders/{id}/cancel', [FuelProviderOrderController::class, 'cancelOrder']);
+        Route::get('/my_orders', [FuelProviderOrderController::class, 'myOrders']);
+    });
 });
 
 Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
@@ -215,17 +222,19 @@ Route::middleware(['auth:sanctum'])->prefix('shop')->group(function () {
     Route::post('/profile', [ShopController::class, 'storeOrUpdateProfile']);
     Route::put('/profile', [ShopController::class, 'storeOrUpdateProfile']);
 
-    Route::get('/products', [ShopController::class, 'products']);
-    Route::post('/products', [ShopController::class, 'storeProduct']);
-    Route::put('/products/{id}', [ShopController::class, 'updateProduct']);
-    Route::delete('/products/{id}', [ShopController::class, 'deleteProduct']);
+    Route::middleware('role:shop-owner')->group(function () {
+        Route::get('/products', [ShopController::class, 'products']);
+        Route::post('/products', [ShopController::class, 'storeProduct']);
+        Route::put('/products/{id}', [ShopController::class, 'updateProduct']);
+        Route::delete('/products/{id}', [ShopController::class, 'deleteProduct']);
 
-    Route::get('/orders', [ShopController::class, 'orders']);
-    Route::get('/orders/{id}', [ShopController::class, 'orderDetails']);
-    Route::post('/orders/{id}/accept', [ShopController::class, 'acceptOrder']);
-    Route::post('/orders/{id}/reject', [ShopController::class, 'rejectOrder']);
-    Route::post('/orders/{id}/status', [ShopController::class, 'updateOrderStatus']);
-    Route::post('/orders/{id}/location', [ShopController::class, 'shareDeliveryLocation']);
+        Route::get('/orders', [ShopController::class, 'orders']);
+        Route::get('/orders/{id}', [ShopController::class, 'orderDetails']);
+        Route::post('/orders/{id}/accept', [ShopController::class, 'acceptOrder']);
+        Route::post('/orders/{id}/reject', [ShopController::class, 'rejectOrder']);
+        Route::post('/orders/{id}/status', [ShopController::class, 'updateOrderStatus']);
+        Route::post('/orders/{id}/location', [ShopController::class, 'shareDeliveryLocation']);
+    });
 });
 
 // routes/api.php

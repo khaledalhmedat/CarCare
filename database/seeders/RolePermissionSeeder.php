@@ -16,6 +16,7 @@ class RolePermissionSeeder extends Seeder
             ['name' => 'Technician', 'slug' => 'technician'],
             ['name' => 'Car Washer', 'slug' => 'car-washer'],
             ['name' => 'Fuel Provider', 'slug' => 'fuel-provider'],
+            ['name' => 'Shop Owner', 'slug' => 'shop-owner'],
         ];
         
         foreach ($roles as $role) {

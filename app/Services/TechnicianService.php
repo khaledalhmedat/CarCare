@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Models\Technician;
+use App\Models\Role;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
@@ -72,6 +73,11 @@ class TechnicianService
                 $technician->hourly_rate = $data['hourly_rate'] ?? null;
                 $technician->certifications = $data['certifications'] ?? null;
                 $technician->save();
+            }
+
+            $role = Role::where('slug', 'technician')->first();
+            if ($role && !$user->hasRole('technician')) {
+                $user->roles()->attach($role->id);
             }
 
             DB::commit();

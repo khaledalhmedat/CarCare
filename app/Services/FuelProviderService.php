@@ -28,7 +28,7 @@ class FuelProviderService
                 $provider = FuelProvider::create($data);
 
                 $role = Role::where('slug', 'fuel-provider')->first();
-                if ($role) {
+                if ($role && !$user->hasRole('fuel-provider')) {
                     $user->roles()->attach($role->id);
                 }
             }

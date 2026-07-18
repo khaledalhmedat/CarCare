@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\Shop;
 use App\Models\Product;
 use App\Models\Order;
+use App\Models\Role;
 use App\Repositories\Contracts\ShopRepositoryInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -30,7 +31,11 @@ class ShopService
                 $this->repository->update($shop, $data);
             } else {
                 $shop = $this->repository->createForUser($user, $data);
-                // $user->assignRole('shop_owner');
+            }
+
+            $role = Role::where('slug', 'shop-owner')->first();
+            if ($role && !$user->hasRole('shop-owner')) {
+                $user->roles()->attach($role->id);
             }
 
             // تحديث العلاقات
