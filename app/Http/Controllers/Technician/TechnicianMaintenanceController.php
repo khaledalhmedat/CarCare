@@ -129,6 +129,71 @@ class TechnicianMaintenanceController extends Controller
         }
     }
 
+    //عرض الطلبات المكتملة
+    public function myCompletedJobs(Request $request): JsonResponse
+    {
+        try {
+            $jobs = $this->technicianService->getMyJobs($request->user(), 'completed');
+
+            return response()->json([
+                'success' => true,
+                'data' => $jobs
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
+
+    //عرض تفاصيل مهمة محددة
+    public function showJob(Request $request, int $id): JsonResponse
+    {
+        try {
+            $job = $this->technicianService->getJobDetails($request->user(), $id);
+
+            return response()->json([
+                'success' => true,
+                'data' => $job
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 404);
+        }
+    }
+
+    //إضافة تقرير صيانة لمهمة مكتملة
+    public function addMaintenanceReport(Request $request, int $id): JsonResponse
+    {
+        try {
+            $data = $request->validate([
+                'details' => 'required|string',
+                'parts_used' => 'nullable|array',
+                'recommendations' => 'nullable|string',
+            ]);
+
+            $record = $this->technicianService->addMaintenanceRecord(
+                $request->user(),
+                $id,
+                $data
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'تم إضافة تقرير الصيانة بنجاح',
+                'data' => $record
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
+
     //تحديث حالة ال job
     public function updateJobStatus(UpdateJobStatusRequest $request, int $id): JsonResponse
     {

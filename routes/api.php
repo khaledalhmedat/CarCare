@@ -104,11 +104,6 @@ Route::prefix('technician')->middleware('auth:sanctum')->group(function () {
     Route::post('/jobs/{id}/report', [TechnicianMaintenanceController::class, 'addMaintenanceReport']);
 });
 
-Route::prefix('debug')->middleware('auth:sanctum')->group(function () {
-    Route::get('/technician-jobs', [TechnicianMaintenanceController::class, 'debugJobs']);
-    Route::get('/technician-all-jobs', [TechnicianMaintenanceController::class, 'allMyJobs']);
-});
-
 Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
 
     Route::get('/car_washers', [CarwashBookingController::class, 'availableCarWashers']);
@@ -253,6 +248,6 @@ Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
     Route::get('/orders/{id}', [CustomerOrderController::class, 'orderDetails']);
     Route::post('/orders/{id}/cancel', [CustomerOrderController::class, 'cancelOrder']);
 
-    Route::get('/orders/{id}/track', [ShopController::class, 'trackDelivery']);
+    Route::get('/orders/{id}/track', [CustomerShopController::class, 'trackDelivery']);
 
 });

@@ -149,6 +149,31 @@ class TechnicianMaintenanceService
 
 
 
+    public function getJobDetails(User $user, int $jobId): ServiceJob
+    {
+        $technician = $user->technician;
+
+        if (!$technician) {
+            throw new \Exception('أنت لست تقنياً');
+        }
+
+        $job = ServiceJob::where('id', $jobId)
+            ->where('technician_id', $technician->user_id)
+            ->with([
+                'maintenanceRequest' => function ($q) {
+                    $q->with(['user', 'vehicle']);
+                },
+                'maintenanceRecord'
+            ])
+            ->first();
+
+        if (!$job) {
+            throw new \Exception('المهمة غير موجودة أو لا تخصك');
+        }
+
+        return $job;
+    }
+
     public function updateJobStatus(User $user, int $jobId, array $data): ServiceJob
     {
         $technician = $user->technician;
@@ -216,7 +241,7 @@ class TechnicianMaintenanceService
         }
 
         $job = ServiceJob::where('id', $jobId)
-            ->where('technician_id', $technician->id)
+            ->where('technician_id', $technician->user_id)
             ->with('maintenanceRequest')
             ->first();
 
