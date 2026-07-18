@@ -34,7 +34,7 @@ deploy:
     - cp docker-compose.yml ${DEPLOY_PATH}/docker-compose.yml
     - cd ${DEPLOY_PATH}
 
-    - printf "%b" "$ENV_FILE" > .env
+    - cp "$ENV_FILE" .env
 
     - docker compose up -d --build --force-recreate --remove-orphans
     - docker image prune -f
