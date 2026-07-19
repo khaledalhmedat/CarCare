@@ -21,6 +21,10 @@ class TechnicianMaintenanceService
             throw new \Exception('أنت لست تقنياً');
         }
 
+        if ($technician->status !== 'approved') {
+            throw new \Exception('حسابك كتقني لم يتم اعتماده بعد من الإدارة');
+        }
+
         $query = MaintenanceRequest::where('status', 'pending')
             ->with(['user', 'vehicle', 'photos'])
             ->latest();
@@ -63,6 +67,10 @@ class TechnicianMaintenanceService
 
         if (!$technician) {
             throw new \Exception('أنت لست تقنياً');
+        }
+
+        if ($technician->status !== 'approved') {
+            throw new \Exception('حسابك كتقني لم يتم اعتماده بعد من الإدارة');
         }
 
         $maintenanceRequest = MaintenanceRequest::find($requestId);

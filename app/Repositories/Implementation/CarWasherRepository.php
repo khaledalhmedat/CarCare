@@ -24,7 +24,7 @@ class CarWasherRepository implements CarWasherRepositoryInterface
     public function getAvailableCarWashers(array $filters = []): LengthAwarePaginator
     {
         $query = $this->model->where('is_available', true)
-            ->where('is_verified', true)
+            ->where('status', 'approved')
             ->with('user');
 
         if (isset($filters['city'])) {

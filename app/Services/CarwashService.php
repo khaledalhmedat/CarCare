@@ -19,7 +19,7 @@ class CarwashService
     public function getAvailableCarWashers(array $filters = [])
     {
         $query = CarWasher::where('is_available', true)
-            // ->where('is_verified', true)
+            ->where('status', 'approved')
             ->with('user');
 
         if (isset($filters['city'])) {
@@ -36,7 +36,13 @@ class CarwashService
 
     public function getCarWasherDetails(int $id): ?CarWasher
     {
-        return CarWasher::with('user')->find($id);
+        $carWasher = CarWasher::with('user')->find($id);
+
+        if (!$carWasher || $carWasher->status !== 'approved') {
+            return null;
+        }
+
+        return $carWasher;
     }
 
 

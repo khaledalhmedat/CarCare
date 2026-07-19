@@ -161,7 +161,7 @@ class FuelOrderService
         $haversine = "(6371 * acos(cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude))))";
 
         return FuelProvider::where('is_available', true)
-            ->where('is_verified', true)
+            ->where('status', 'approved')
             ->whereNotNull('latitude')
             ->whereNotNull('longitude')
             ->selectRaw("*, {$haversine} AS distance", [$lat, $lng, $lat])
@@ -181,7 +181,7 @@ class FuelOrderService
         }
 
         return FuelProvider::where('is_available', true)
-            ->where('is_verified', true)
+            ->where('status', 'approved')
             ->where('city', $city)
             ->get()
             ->map(function ($provider) {

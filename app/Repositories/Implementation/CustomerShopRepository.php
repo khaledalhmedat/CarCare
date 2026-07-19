@@ -24,6 +24,7 @@ class CustomerShopRepository implements CustomerShopRepositoryInterface
     public function getShops(array $filters = []): LengthAwarePaginator
     {
         $query = $this->shopModel->where('is_active', true)
+            ->where('status', 'approved')
             ->with(['businessTypes', 'carBrands', 'partCategories', 'user']);
 
         if (isset($filters['city'])) {
@@ -71,7 +72,7 @@ class CustomerShopRepository implements CustomerShopRepositoryInterface
     {
         $query = $this->productModel->with(['shop', 'images', 'carBrand', 'partCategory'])
             ->whereHas('shop', function($q) {
-                $q->where('is_active', true);
+                $q->where('is_active', true)->where('status', 'approved');
             });
 
         if (isset($filters['search'])) {

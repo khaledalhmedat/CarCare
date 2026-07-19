@@ -113,6 +113,12 @@ class TechnicianSosService
 
     public function acceptRequest(User $technician, int $requestId, array $data): SosRequest
     {
+        $technicianProfile = $technician->technician;
+
+        if (!$technicianProfile || $technicianProfile->status !== 'approved') {
+            throw new \Exception('حسابك كتقني لم يتم اعتماده بعد من الإدارة');
+        }
+
         $sosRequest = $this->repository->find($requestId);
 
         if (!$sosRequest) {
