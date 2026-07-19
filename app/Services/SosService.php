@@ -55,6 +55,7 @@ class SosService
 
                 if ($city) {
                     $cityTechnicians = Technician::where('is_available', true)
+                        ->where('status', 'approved')
                         ->where('city', $city)
                         ->get();
 
@@ -93,6 +94,7 @@ class SosService
         $haversine = "(6371 * acos(cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude))))";
 
         return Technician::where('is_available', true)
+            ->where('status', 'approved')
             ->whereNotNull('latitude')
             ->whereNotNull('longitude')
             ->selectRaw("*, {$haversine} AS distance", [$lat, $lng, $lat])

@@ -21,7 +21,7 @@ class CustomerShopService
     public function getShopDetails(int $id)
     {
         $shop = $this->repository->findShop($id);
-        if (!$shop) {
+        if (!$shop || $shop->status !== 'approved') {
             throw new \Exception('المتجر غير موجود');
         }
         return $shop;
@@ -30,7 +30,7 @@ class CustomerShopService
     public function getShopProducts(int $shopId, array $filters)
     {
         $shop = $this->repository->findShop($shopId);
-        if (!$shop) {
+        if (!$shop || $shop->status !== 'approved') {
             throw new \Exception('المتجر غير موجود');
         }
         return $this->repository->getShopProducts($shopId, $filters);
@@ -45,7 +45,7 @@ class CustomerShopService
     public function getProductDetails(int $id)
     {
         $product = $this->repository->findProduct($id);
-        if (!$product) {
+        if (!$product || !$product->shop || $product->shop->status !== 'approved') {
             throw new \Exception('المنتج غير موجود');
         }
         return $product;

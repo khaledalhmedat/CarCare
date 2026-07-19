@@ -18,6 +18,13 @@ class TechnicianSosController extends Controller
     {
         $technician = $request->user()->technician;
 
+        if (!$technician || $technician->status !== 'approved') {
+            return response()->json([
+                'success' => false,
+                'message' => 'حسابك كتقني لم يتم اعتماده بعد من الإدارة'
+            ], 403);
+        }
+
         $requests = $this->sosService->getAvailableRequests(
             $technician?->latitude,
             $technician?->longitude,
