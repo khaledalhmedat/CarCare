@@ -25,6 +25,12 @@ class TechnicianResource extends JsonResource
             'hourly_rate' => $this->hourly_rate,
             'is_available' => $this->is_available,
 
+            'status' => $this->status,
+            'rejection_reason' => $this->rejection_reason,
+            'approved_at' => $this->approved_at?->toDateTimeString(),
+            'rejected_at' => $this->rejected_at?->toDateTimeString(),
+            'suspended_at' => $this->suspended_at?->toDateTimeString(),
+
             'certifications' => $certificationUrls,
             'certifications_raw' => $certifications,
 

@@ -72,6 +72,7 @@ class TechnicianService
                 $technician->city = $data['city'] ?? null;
                 $technician->hourly_rate = $data['hourly_rate'] ?? null;
                 $technician->certifications = $data['certifications'] ?? null;
+                $technician->status = 'pending';
                 $technician->save();
             }
 

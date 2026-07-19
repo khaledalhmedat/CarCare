@@ -21,6 +21,11 @@ class FuelProvider extends Model
         'prices',
         'is_available',
         'is_verified',
+        'status',
+        'rejection_reason',
+        'approved_at',
+        'rejected_at',
+        'suspended_at',
     ];
 
     protected $casts = [
@@ -30,6 +35,9 @@ class FuelProvider extends Model
         'longitude' => 'decimal:7',
         'is_available' => 'boolean',
         'is_verified' => 'boolean',
+        'approved_at' => 'datetime',
+        'rejected_at' => 'datetime',
+        'suspended_at' => 'datetime',
     ];
 
     public function user()

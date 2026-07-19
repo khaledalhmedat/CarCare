@@ -14,6 +14,13 @@ class ShopResource extends JsonResource
             'phone' => $this->phone,
             'city' => $this->city,
             'is_active' => $this->is_active,
+
+            'status' => $this->status,
+            'rejection_reason' => $this->rejection_reason,
+            'approved_at' => $this->approved_at?->toDateTimeString(),
+            'rejected_at' => $this->rejected_at?->toDateTimeString(),
+            'suspended_at' => $this->suspended_at?->toDateTimeString(),
+
             'owner' => [
                 'id' => $this->user->id,
                 'name' => $this->user->name,

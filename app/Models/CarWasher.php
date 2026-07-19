@@ -24,6 +24,11 @@ class CarWasher extends Model
         'is_verified',
         'average_rating',
         'ratings_count',
+        'status',
+        'rejection_reason',
+        'approved_at',
+        'rejected_at',
+        'suspended_at',
     ];
 
     protected $casts = [
@@ -36,6 +41,9 @@ class CarWasher extends Model
         'is_available' => 'boolean',
         'is_verified' => 'boolean',
         'average_rating' => 'decimal:2',
+        'approved_at' => 'datetime',
+        'rejected_at' => 'datetime',
+        'suspended_at' => 'datetime',
     ];
 
     public function user()
