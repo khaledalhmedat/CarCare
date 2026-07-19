@@ -31,8 +31,12 @@ class CustomerShopController extends Controller
 
     public function shopDetails(int $id)
     {
-        $shop = $this->shopService->getShopDetails($id);
-        
+        try {
+            $shop = $this->shopService->getShopDetails($id);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 404);
+        }
+
         return response()->json([
             'success' => true,
             'data' => new ShopResource($shop)
@@ -41,8 +45,12 @@ class CustomerShopController extends Controller
 
     public function shopProducts(Request $request, int $id)
     {
-        $products = $this->shopService->getShopProducts($id, $request->only(['search', 'part_category_id', 'per_page']));
-        
+        try {
+            $products = $this->shopService->getShopProducts($id, $request->only(['search', 'part_category_id', 'per_page']));
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 404);
+        }
+
         return response()->json([
             'success' => true,
             'data' => ProductResource::collection($products),
@@ -71,8 +79,12 @@ class CustomerShopController extends Controller
 
     public function productDetails(int $id)
     {
-        $product = $this->shopService->getProductDetails($id);
-        
+        try {
+            $product = $this->shopService->getProductDetails($id);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 404);
+        }
+
         return response()->json([
             'success' => true,
             'data' => new ProductResource($product)
