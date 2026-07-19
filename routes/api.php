@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\ProviderApprovalController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\CarwashBooking\CarwashBookingController;
 use App\Http\Controllers\CarWasher\CarWasherController;
@@ -27,6 +28,15 @@ Route::prefix('auth')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
     });
+});
+
+Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/provider-approvals')->group(function () {
+    Route::get('/{type}', [ProviderApprovalController::class, 'index']);
+    Route::get('/{type}/{id}', [ProviderApprovalController::class, 'show']);
+    Route::post('/{type}/{id}/approve', [ProviderApprovalController::class, 'approve']);
+    Route::post('/{type}/{id}/reject', [ProviderApprovalController::class, 'reject']);
+    Route::post('/{type}/{id}/suspend', [ProviderApprovalController::class, 'suspend']);
+    Route::post('/{type}/{id}/reactivate', [ProviderApprovalController::class, 'reactivate']);
 });
 
 Route::prefix('profile')->middleware('auth:sanctum')->group(function () {
