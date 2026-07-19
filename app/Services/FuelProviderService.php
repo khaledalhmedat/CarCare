@@ -25,6 +25,7 @@ class FuelProviderService
                 $provider->update($data);
             } else {
                 $data['user_id'] = $user->id;
+                $data['status'] = 'pending';
                 $provider = FuelProvider::create($data);
 
                 $role = Role::where('slug', 'fuel-provider')->first();

@@ -18,7 +18,12 @@ class Technician extends Model
         'is_available',
         'certifications',
         'latitude',
-        'longitude',     
+        'longitude',
+        'status',
+        'rejection_reason',
+        'approved_at',
+        'rejected_at',
+        'suspended_at',
     ];
 
     protected $casts = [
@@ -27,6 +32,9 @@ class Technician extends Model
         'average_rating' => 'float',
         'latitude' => 'decimal:7',
         'longitude' => 'decimal:7',
+        'approved_at' => 'datetime',
+        'rejected_at' => 'datetime',
+        'suspended_at' => 'datetime',
     ];
 
 

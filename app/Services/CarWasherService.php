@@ -31,6 +31,7 @@ class CarWasherService
             if ($carWasher) {
                 $this->repository->update($carWasher, $data);
             } else {
+                $data['status'] = 'pending';
                 $carWasher = $this->repository->createForUser($user, $data);
 
                 $role = Role::where('slug', 'car-washer')->first();

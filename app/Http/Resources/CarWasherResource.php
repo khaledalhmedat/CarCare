@@ -21,7 +21,13 @@ class CarWasherResource extends JsonResource
             'description' => $this->description,
             'is_available' => $this->is_available,
             'is_verified' => $this->is_verified,
-            
+
+            'status' => $this->status,
+            'rejection_reason' => $this->rejection_reason,
+            'approved_at' => $this->approved_at?->toDateTimeString(),
+            'rejected_at' => $this->rejected_at?->toDateTimeString(),
+            'suspended_at' => $this->suspended_at?->toDateTimeString(),
+
             'average_rating' => round($this->average_rating, 2),
             'ratings_count' => $this->ratings_count,
             'rating_stars' => $this->getRatingStars(),

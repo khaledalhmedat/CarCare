@@ -7,11 +7,15 @@ use Illuminate\Database\Eloquent\Model;
 class Shop extends Model
 {
     protected $fillable = [
-        'user_id', 'name', 'phone', 'city', 'is_active'
+        'user_id', 'name', 'phone', 'city', 'is_active',
+        'status', 'rejection_reason', 'approved_at', 'rejected_at', 'suspended_at',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'approved_at' => 'datetime',
+        'rejected_at' => 'datetime',
+        'suspended_at' => 'datetime',
     ];
 
     public function user()

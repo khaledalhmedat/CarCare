@@ -30,6 +30,7 @@ class ShopService
             if ($shop) {
                 $this->repository->update($shop, $data);
             } else {
+                $data['status'] = 'pending';
                 $shop = $this->repository->createForUser($user, $data);
             }
 
