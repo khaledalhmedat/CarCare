@@ -1,29 +1,10 @@
 name: carcarex
 
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: carcarex-mysql
-    restart: always
-    ports:
-      - "3310:3306"
-    volumes:
-      - carcarex_mysql_data:/var/lib/mysql
-    environment:
-      MYSQL_ROOT_PASSWORD: KtIA720dU2UAfvk2W9do
-      MYSQL_DATABASE: carcarex
-      MYSQL_USER: carcarex
-      MYSQL_PASSWORD: KtIA720dU2UAfvk2W9do
-    networks:
-      - shared_db_net
-
   app:
     image: carcarex:latest
     container_name: carcarex-app
     restart: always
-    depends_on:
-      mysql:
-        condition: service_started
     ports:
       - "8013:9000"
     volumes:
@@ -76,9 +57,6 @@ services:
       - CONTAINER_ROLE=scheduler
     networks:
       - shared_db_net
-
-volumes:
-  carcarex_mysql_data:
 
 networks:
   shared_db_net:
