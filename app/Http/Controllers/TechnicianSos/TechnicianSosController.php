@@ -44,7 +44,12 @@ class TechnicianSosController extends Controller
 
     public function showRequest(int $id)
     {
-        $request = $this->sosService->getRequestDetails($id);
+        try {
+            $request = $this->sosService->getRequestDetails($id);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 404);
+        }
+
         return response()->json(['success' => true, 'data' => new SosResource($request)]);
     }
 
