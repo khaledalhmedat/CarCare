@@ -30,7 +30,8 @@ class User extends Authenticatable
 
     public function assignRole($role)
     {
-        $this->roles()->sync([$role]);
+        // additive: never detach other roles (a user can hold multiple provider roles)
+        $this->roles()->syncWithoutDetaching([$role]);
     }
 
 

@@ -21,8 +21,18 @@ class TechnicianService
         $uploadedFiles = [];
 
         if ($technician && $technician->certifications) {
-            $oldCertifications = json_decode($technician->certifications, true) ?? [];
-            foreach ($oldCertifications as $oldFile) {
+            // may be an array (model cast) or a JSON string from older rows
+            $oldCertifications = $technician->certifications;
+
+            if (is_string($oldCertifications)) {
+                $oldCertifications = json_decode($oldCertifications, true);
+
+                if (is_string($oldCertifications)) {
+                    $oldCertifications = json_decode($oldCertifications, true);
+                }
+            }
+
+            foreach (is_array($oldCertifications) ? $oldCertifications : [] as $oldFile) {
                 Storage::disk('public')->delete($oldFile);
             }
         }
@@ -46,8 +56,8 @@ class TechnicianService
             $technician = $user->technician;
 
             if (isset($data['certifications']) && !empty($data['certifications'])) {
-                $certificationsPaths = $this->uploadCertifications($data['certifications'], $technician);
-                $data['certifications'] = json_encode($certificationsPaths);
+                // pass the raw array — the model's 'array' cast handles JSON encoding
+                $data['certifications'] = $this->uploadCertifications($data['certifications'], $technician);
             } else {
                 unset($data['certifications']);
             }
