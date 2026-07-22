@@ -19,13 +19,13 @@ class SosResource extends JsonResource
             'status_text' => $this->getStatusText(),
             'priority' => $this->priority,
             'vehicle' => new VehicleResource($this->whenLoaded('vehicle')),
-            'technician' => $this->whenLoaded('technician', fn() => [
+            'technician' => $this->whenLoaded('technician', fn() => $this->technician ? [
                 'id' => $this->technician->id,
                 'name' => $this->technician->name,
                 'phone' => $this->technician->phone,
-            ]),
-            'created_at' => $this->created_at->toDateTimeString(),
-            'created_ago' => $this->created_at->diffForHumans(),
+            ] : null),
+            'created_at' => $this->created_at?->toDateTimeString(),
+            'created_ago' => $this->created_at?->diffForHumans(),
             'can_cancel' => in_array($this->status, ['open', 'accepted']),
         ];
     }
