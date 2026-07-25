@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ProviderApprovalController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\HealthController;
 use App\Http\Controllers\CarwashBooking\CarwashBookingController;
 use App\Http\Controllers\CarWasher\CarWasherController;
 use App\Http\Controllers\CustomerOrder\CustomerOrderController;
@@ -20,6 +22,8 @@ use App\Http\Controllers\Tracking\TrackingController;
 use App\Http\Controllers\Vehicle\VehicleController;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/health', [HealthController::class, 'index']);
+
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
@@ -28,6 +32,12 @@ Route::prefix('auth')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
     });
+});
+
+Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/dashboard')->group(function () {
+    Route::get('/summary', [DashboardController::class, 'summary']);
+    Route::get('/operations', [DashboardController::class, 'operations']);
+    Route::get('/revenue', [DashboardController::class, 'revenue']);
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/provider-approvals')->group(function () {
