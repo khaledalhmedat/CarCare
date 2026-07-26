@@ -9,8 +9,10 @@ use App\Http\Controllers\Admin\ProviderBillingStatusController;
 use App\Http\Controllers\Admin\ProviderInvoiceController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\HealthController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\CarwashBooking\CarwashBookingController;
 use App\Http\Controllers\CarWasher\CarWasherController;
 use App\Http\Controllers\CustomerOrder\CustomerOrderController;
@@ -37,6 +39,7 @@ Route::get('/advertisements/active', [PublicAdvertisementController::class, 'act
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/google', [GoogleAuthController::class, 'login']);
 
     // Public OTP-based password reset (rate-limited to reduce abuse)
     Route::middleware('throttle:6,1')->group(function () {
@@ -105,6 +108,16 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/provider-approv
     Route::post('/{type}/{id}/reject', [ProviderApprovalController::class, 'reject']);
     Route::post('/{type}/{id}/suspend', [ProviderApprovalController::class, 'suspend']);
     Route::post('/{type}/{id}/reactivate', [ProviderApprovalController::class, 'reactivate']);
+});
+
+Route::middleware('auth:sanctum')->prefix('notifications')->group(function () {
+    Route::get('/', [NotificationController::class, 'index']);
+    // literal routes declared before /{id} so they are not captured as an id
+    Route::get('/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::post('/mark-all-as-read', [NotificationController::class, 'markAllAsRead']);
+    Route::get('/{id}', [NotificationController::class, 'show']);
+    Route::post('/{id}/mark-as-read', [NotificationController::class, 'markAsRead']);
+    Route::delete('/{id}', [NotificationController::class, 'destroy']);
 });
 
 Route::prefix('profile')->middleware('auth:sanctum')->group(function () {

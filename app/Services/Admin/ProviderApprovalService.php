@@ -10,11 +10,14 @@ use App\Models\CarWasher;
 use App\Models\FuelProvider;
 use App\Models\Shop;
 use App\Models\Technician;
+use App\Services\NotificationService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 class ProviderApprovalService
 {
+    public function __construct(protected NotificationService $notifications) {}
+
     protected const TYPES = [
         'technician' => [
             'model' => Technician::class,
@@ -112,7 +115,10 @@ class ProviderApprovalService
         $provider->rejection_reason = null;
         $provider->save();
 
-        return $provider->fresh($this->eagerLoads($type));
+        $fresh = $provider->fresh($this->eagerLoads($type));
+        $this->notifyProvider($fresh, $type, 'provider_approved', 'تمت الموافقة على الحساب', 'تمت الموافقة على حسابك كمزود خدمة.');
+
+        return $fresh;
     }
 
     public function reject(string $type, int $id, string $reason): Model
@@ -126,7 +132,10 @@ class ProviderApprovalService
         $provider->suspended_at = null;
         $provider->save();
 
-        return $provider->fresh($this->eagerLoads($type));
+        $fresh = $provider->fresh($this->eagerLoads($type));
+        $this->notifyProvider($fresh, $type, 'provider_rejected', 'تم رفض الحساب', 'تم رفض طلبك كمزود خدمة.');
+
+        return $fresh;
     }
 
     public function suspend(string $type, int $id): Model
@@ -140,7 +149,10 @@ class ProviderApprovalService
         $provider->rejection_reason = null;
         $provider->save();
 
-        return $provider->fresh($this->eagerLoads($type));
+        $fresh = $provider->fresh($this->eagerLoads($type));
+        $this->notifyProvider($fresh, $type, 'provider_suspended', 'تم إيقاف الحساب', 'تم إيقاف حسابك كمزود خدمة مؤقتاً.');
+
+        return $fresh;
     }
 
     public function reactivate(string $type, int $id): Model
@@ -154,6 +166,26 @@ class ProviderApprovalService
         $provider->rejection_reason = null;
         $provider->save();
 
-        return $provider->fresh($this->eagerLoads($type));
+        $fresh = $provider->fresh($this->eagerLoads($type));
+        $this->notifyProvider($fresh, $type, 'provider_reactivated', 'تمت إعادة تفعيل الحساب', 'تمت إعادة تفعيل حسابك كمزود خدمة.');
+
+        return $fresh;
+    }
+
+    /**
+     * Notify the provider's owning user. Safe identifiers only; never throws
+     * (NotificationService swallows failures), so approval flow is never broken.
+     */
+    protected function notifyProvider(Model $provider, string $type, string $notifType, string $title, string $body): void
+    {
+        $user = $provider->user;
+
+        if ($user) {
+            $this->notifications->notifyUser($user, $notifType, $title, $body, [
+                'provider_type' => $type,
+                'provider_id' => $provider->id,
+                'status' => $provider->status,
+            ]);
+        }
     }
 }

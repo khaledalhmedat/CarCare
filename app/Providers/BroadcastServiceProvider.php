@@ -12,7 +12,9 @@ class BroadcastServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        Broadcast::routes();
+        // Authorize private channels for API (token) clients via Sanctum,
+        // so /broadcasting/auth works with a Bearer token from Reverb/Echo.
+        Broadcast::routes(['middleware' => ['auth:sanctum']]);
 
         require base_path('routes/channels.php');
     }

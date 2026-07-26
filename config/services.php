@@ -31,4 +31,10 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'google' => [
+        // one or more allowed OAuth client IDs (comma-separated for web/android/ios).
+        // Used as the expected "aud" claim when verifying Google ID tokens.
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+    ],
+
 ];

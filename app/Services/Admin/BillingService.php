@@ -9,12 +9,16 @@ use App\Models\ProviderBillingSetting;
 use App\Models\ProviderInvoice;
 use App\Models\ProviderInvoiceItem;
 use App\Models\Technician;
+use App\Models\User;
+use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class BillingService
 {
+    public function __construct(protected NotificationService $notifications) {}
+
     public const PROVIDER_TYPES = ['technician', 'car-washer', 'fuel-provider', 'shop'];
     public const BILLING_TYPES = [
         'monthly_subscription',
@@ -272,7 +276,10 @@ class BillingService
             'due_at' => now()->addDays($dueDays),
         ]);
 
-        return $invoice->fresh('items');
+        $fresh = $invoice->fresh('items');
+        $this->notifyInvoice($fresh, 'invoice_issued', 'تم إصدار فاتورة', 'تم إصدار فاتورة جديدة لحسابك، يرجى المراجعة والدفع.');
+
+        return $fresh;
     }
 
     public function markPaid(ProviderInvoice $invoice, int $adminId, array $data): ProviderInvoice
@@ -290,7 +297,10 @@ class BillingService
             'notes' => $data['notes'] ?? $invoice->notes,
         ]);
 
-        return $invoice->fresh('items');
+        $fresh = $invoice->fresh('items');
+        $this->notifyInvoice($fresh, 'invoice_paid', 'تم تأكيد الدفع', 'تم تأكيد دفع فاتورتك بنجاح.');
+
+        return $fresh;
     }
 
     public function cancel(ProviderInvoice $invoice): ProviderInvoice
@@ -304,7 +314,40 @@ class BillingService
 
         $invoice->update(['status' => ProviderInvoice::STATUS_CANCELLED]);
 
-        return $invoice->fresh('items');
+        $fresh = $invoice->fresh('items');
+        $this->notifyInvoice($fresh, 'invoice_cancelled', 'تم إلغاء الفاتورة', 'تم إلغاء إحدى فواتيرك.');
+
+        return $fresh;
+    }
+
+    /**
+     * Notify the invoice's provider user. Safe identifiers only (no payment
+     * references); never throws, so invoice actions are never broken.
+     */
+    protected function notifyInvoice(ProviderInvoice $invoice, string $type, string $title, string $body): void
+    {
+        $user = $this->providerUser($invoice);
+
+        if ($user) {
+            $this->notifications->notifyUser($user, $type, $title, $body, [
+                'invoice_id' => $invoice->id,
+                'provider_type' => $invoice->provider_type,
+                'provider_id' => $invoice->provider_id,
+                'status' => $invoice->status,
+            ]);
+        }
+    }
+
+    protected function providerUser(ProviderInvoice $invoice): ?User
+    {
+        $table = $this->providerTable($invoice->provider_type);
+        if (!$table) {
+            return null;
+        }
+
+        $userId = DB::table($table)->where('id', $invoice->provider_id)->value('user_id');
+
+        return $userId ? User::find($userId) : null;
     }
 
     // ==================== Provider billing status ====================
