@@ -1,7 +1,10 @@
 <?php
 
+use App\Http\Controllers\Admin\BillingSettingController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ProviderApprovalController;
+use App\Http\Controllers\Admin\ProviderBillingStatusController;
+use App\Http\Controllers\Admin\ProviderInvoiceController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\CarwashBooking\CarwashBookingController;
@@ -38,6 +41,26 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/dashboard')->gr
     Route::get('/summary', [DashboardController::class, 'summary']);
     Route::get('/operations', [DashboardController::class, 'operations']);
     Route::get('/revenue', [DashboardController::class, 'revenue']);
+});
+
+Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/billing')->group(function () {
+    // Billing settings
+    Route::get('/settings', [BillingSettingController::class, 'index']);
+    Route::post('/settings', [BillingSettingController::class, 'store']);
+    Route::get('/settings/{id}', [BillingSettingController::class, 'show']);
+    Route::put('/settings/{id}', [BillingSettingController::class, 'update']);
+    Route::delete('/settings/{id}', [BillingSettingController::class, 'destroy']);
+
+    // Provider billing status (dashboard) — declared before /invoices/{id} to avoid capture
+    Route::get('/provider-status', [ProviderBillingStatusController::class, 'index']);
+
+    // Provider invoices
+    Route::get('/invoices', [ProviderInvoiceController::class, 'index']);
+    Route::post('/invoices/generate', [ProviderInvoiceController::class, 'generate']);
+    Route::get('/invoices/{id}', [ProviderInvoiceController::class, 'show']);
+    Route::post('/invoices/{id}/issue', [ProviderInvoiceController::class, 'issue']);
+    Route::post('/invoices/{id}/mark-paid', [ProviderInvoiceController::class, 'markPaid']);
+    Route::post('/invoices/{id}/cancel', [ProviderInvoiceController::class, 'cancel']);
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/provider-approvals')->group(function () {
