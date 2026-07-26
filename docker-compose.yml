@@ -58,6 +58,22 @@ services:
     networks:
       - shared_db_net
 
+  reverb:
+    image: carcarex:latest
+    container_name: carcarex-reverb
+    restart: always
+    command: ["php", "artisan", "reverb:start"]
+    ports:
+      - "8870:8870"
+    volumes:
+      - /opt/carcarex/storage:/var/www/html/storage
+    env_file:
+      - .env
+    environment:
+      - CONTAINER_ROLE=reverb
+    networks:
+      - shared_db_net
+
 networks:
   shared_db_net:
     external: true
