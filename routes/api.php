@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ProviderApprovalController;
 use App\Http\Controllers\Admin\ProviderBillingStatusController;
 use App\Http\Controllers\Admin\ProviderInvoiceController;
+use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\CarwashBooking\CarwashBookingController;
@@ -46,6 +47,15 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/dashboard')->gr
     Route::get('/summary', [DashboardController::class, 'summary']);
     Route::get('/operations', [DashboardController::class, 'operations']);
     Route::get('/revenue', [DashboardController::class, 'revenue']);
+});
+
+Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/reports')->group(function () {
+    Route::get('/overview', [ReportController::class, 'overview']);
+    Route::get('/operations', [ReportController::class, 'operations']);
+    Route::get('/providers', [ReportController::class, 'providers']);
+    Route::get('/financial', [ReportController::class, 'financial']);
+    Route::get('/billing', [ReportController::class, 'billing']);
+    Route::get('/advertisements', [ReportController::class, 'advertisements']);
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/advertisements')->group(function () {
