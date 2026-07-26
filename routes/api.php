@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\ProviderBillingStatusController;
 use App\Http\Controllers\Admin\ProviderInvoiceController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\CarwashBooking\CarwashBookingController;
 use App\Http\Controllers\CarWasher\CarWasherController;
@@ -36,6 +37,13 @@ Route::get('/advertisements/active', [PublicAdvertisementController::class, 'act
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
+
+    // Public OTP-based password reset (rate-limited to reduce abuse)
+    Route::middleware('throttle:6,1')->group(function () {
+        Route::post('/forgot-password', [PasswordResetController::class, 'forgotPassword']);
+        Route::post('/verify-reset-otp', [PasswordResetController::class, 'verifyResetOtp']);
+        Route::post('/reset-password', [PasswordResetController::class, 'resetPassword']);
+    });
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
