@@ -192,6 +192,14 @@ public function getShopOrder(User $user, int $orderId): Order
  */
 public function acceptOrder(User $user, int $orderId): Order
 {
+    $shop = $this->repository->findByUser($user);
+    if (!$shop) {
+        throw new \Exception('لم تقم بإدخال معلومات متجرك بعد');
+    }
+    if ($shop->status !== 'approved') {
+        throw new \Exception('متجرك لم يتم اعتماده بعد من الإدارة');
+    }
+
     $order = $this->getShopOrder($user, $orderId);
 
     if ($order->status !== 'pending') {

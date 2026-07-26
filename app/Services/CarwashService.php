@@ -115,6 +115,10 @@ class CarwashService
             throw new \Exception('لم تقم بإدخال معلومات مغسلتك بعد');
         }
 
+        if ($carWasher->status !== 'approved') {
+            throw new \Exception('حسابك كمغسلة لم يتم اعتماده بعد من الإدارة');
+        }
+
         $booking = $this->repository->find($bookingId);
 
         if (!$booking || $booking->car_washer_id !== $carWasher->id) {

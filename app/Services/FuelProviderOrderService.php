@@ -66,6 +66,10 @@ class FuelProviderOrderService
             throw new \Exception('لم تقم بإدخال معلومات مزود الوقود بعد');
         }
 
+        if ($fuelProvider->status !== 'approved') {
+            throw new \Exception('حسابك كمزود وقود لم يتم اعتماده بعد من الإدارة');
+        }
+
         $order = $this->repository->find($orderId);
 
         if (!$order) {

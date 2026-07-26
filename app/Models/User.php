@@ -25,7 +25,8 @@ class User extends Authenticatable
 
     protected $hidden = [
         'password',
-        'remember_token'
+        'remember_token',
+        'google_id', // OAuth subject id — never needed in any API response
     ];
 
     public function assignRole($role)
