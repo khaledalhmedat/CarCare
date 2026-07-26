@@ -10,6 +10,7 @@ use App\Events\FuelOrderStatusUpdated;
 use App\Events\FuelOrderCancelled;
 use App\Events\FuelProviderLocationUpdated;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use App\Events\NewEmergencyFuelOrder;
 use App\Helpers\HaversineTrait;
 use App\Models\FuelOrderTrackingPoint;
@@ -70,22 +71,22 @@ class FuelProviderOrderService
             throw new \Exception('حسابك كمزود وقود لم يتم اعتماده بعد من الإدارة');
         }
 
-        $order = $this->repository->find($orderId);
+        // Lock the row so two providers cannot claim the same pending order:
+        // whoever acquires the lock first accepts; the other re-reads 'accepted' and is rejected.
+        $order = DB::transaction(function () use ($fuelProvider, $orderId, $data) {
+            $order = FuelOrder::whereKey($orderId)->lockForUpdate()->first();
 
-        if (!$order) {
-            throw new \Exception('الطلب غير موجود');
-        }
+            if (!$order) {
+                throw new \Exception('الطلب غير موجود');
+            }
 
-        if ($order->status !== 'pending') {
-            throw new \Exception('هذا الطلب غير متاح للقبول');
-        }
+            if ($order->status !== 'pending') {
+                throw new \Exception('هذا الطلب غير متاح للقبول');
+            }
 
-        $prices = $fuelProvider->prices ?? [];
-        $pricePerLiter = $prices[$order->fuel_type] ?? 2.5;
-        $totalPrice = $order->amount * $pricePerLiter;
-
-        try {
-            DB::beginTransaction();
+            $prices = $fuelProvider->prices ?? [];
+            $pricePerLiter = $prices[$order->fuel_type] ?? 2.5;
+            $totalPrice = $order->amount * $pricePerLiter;
 
             $order->update([
                 'fuel_provider_id' => $fuelProvider->id,
@@ -96,15 +97,17 @@ class FuelProviderOrderService
                 'provider_notes' => $data['notes'] ?? null,
             ]);
 
+            return $order;
+        });
+
+        // broadcast after commit — a broadcast failure must not undo the accept
+        try {
             broadcast(new FuelOrderAccepted($order, $fuelProvider));
-
-            DB::commit();
-
-            return $order->fresh(['user', 'vehicle']);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            throw $e;
+        } catch (\Throwable $e) {
+            Log::warning('fuel.accept.broadcast_failed', ['order_id' => $orderId, 'error' => $e->getMessage()]);
         }
+
+        return $order->fresh(['user', 'vehicle']);
     }
 
 
@@ -159,6 +162,13 @@ class FuelProviderOrderService
 
         if (!$order || $order->fuel_provider_id !== $fuelProvider->id) {
             throw new \Exception('الطلب غير موجود أو لا يخصك');
+        }
+
+        // only allow forward transitions; blocks re-completing (which would duplicate the FuelLog)
+        // and blocks updating a cancelled/completed order
+        $allowedFrom = ['in_progress' => ['accepted'], 'completed' => ['accepted', 'in_progress']];
+        if (!isset($allowedFrom[$status]) || !in_array($order->status, $allowedFrom[$status], true)) {
+            throw new \Exception('لا يمكن تحديث حالة الطلب في وضعه الحالي');
         }
 
         $data = ['status' => $status];

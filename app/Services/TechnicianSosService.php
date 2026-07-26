@@ -119,34 +119,36 @@ class TechnicianSosService
             throw new \Exception('حسابك كتقني لم يتم اعتماده بعد من الإدارة');
         }
 
-        $sosRequest = $this->repository->find($requestId);
+        // Lock the row so two technicians cannot claim the same open request:
+        // whoever acquires the lock first accepts; the other re-reads 'accepted' and is rejected.
+        $sosRequest = DB::transaction(function () use ($technician, $requestId) {
+            $request = SosRequest::whereKey($requestId)->lockForUpdate()->first();
 
-        if (!$sosRequest) {
-            throw new \Exception('الطلب غير موجود');
-        }
+            if (!$request) {
+                throw new \Exception('الطلب غير موجود');
+            }
 
-        if ($sosRequest->status !== 'open') {
-            throw new \Exception('هذا الطلب غير متاح للقبول');
-        }
+            if ($request->status !== 'open') {
+                throw new \Exception('هذا الطلب غير متاح للقبول');
+            }
 
-        try {
-            DB::beginTransaction();
-
-            $sosRequest->update([
+            $request->update([
                 'technician_id' => $technician->id,
                 'status' => 'accepted',
                 'accepted_at' => now(),
             ]);
 
+            return $request;
+        });
+
+        // broadcast after commit — a broadcast failure must not undo the accept
+        try {
             broadcast(new SosRequestAccepted($sosRequest, $technician));
-
-            DB::commit();
-
-            return $sosRequest->fresh(['user', 'vehicle']);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            throw $e;
+        } catch (\Throwable $e) {
+            Log::warning('sos.accept.broadcast_failed', ['sos_id' => $requestId, 'error' => $e->getMessage()]);
         }
+
+        return $sosRequest->fresh(['user', 'vehicle']);
     }
 
     public function updateStatus(User $technician, int $requestId, string $status): SosRequest
@@ -161,6 +163,12 @@ class TechnicianSosService
             throw new \Exception('لا تملك صلاحية تحديث هذا الطلب');
         }
 
+        // only allow forward transitions; blocks completing a cancelled/completed/open request
+        $allowedFrom = ['in_progress' => ['accepted'], 'completed' => ['accepted', 'in_progress']];
+        if (!isset($allowedFrom[$status]) || !in_array($sosRequest->status, $allowedFrom[$status], true)) {
+            throw new \Exception('لا يمكن تحديث حالة الطلب في وضعه الحالي');
+        }
+
         $data = ['status' => $status];
 
         if ($status === 'in_progress') {
@@ -173,7 +181,11 @@ class TechnicianSosService
 
         $sosRequest->update($data);
 
-        broadcast(new SosRequestStatusUpdated($sosRequest));
+        try {
+            broadcast(new SosRequestStatusUpdated($sosRequest));
+        } catch (\Throwable $e) {
+            Log::warning('sos.status.broadcast_failed', ['sos_id' => $requestId, 'error' => $e->getMessage()]);
+        }
 
         return $sosRequest->fresh();
     }

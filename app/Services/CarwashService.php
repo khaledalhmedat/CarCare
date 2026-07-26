@@ -189,6 +189,12 @@ class CarwashService
             throw new \Exception('الحالة غير صحيحة');
         }
 
+        // only allow forward transitions; blocks completing a cancelled/completed/pending booking
+        $allowedFrom = ['in_progress' => ['accepted'], 'completed' => ['accepted', 'in_progress']];
+        if (!in_array($booking->status, $allowedFrom[$status], true)) {
+            throw new \Exception('لا يمكن تحديث حالة الحجز في وضعه الحالي');
+        }
+
         $this->repository->updateStatus($booking, $status);
 
         return $booking->fresh();
