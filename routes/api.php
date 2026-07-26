@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\AdvertisementController as PublicAdvertisementController;
+use App\Http\Controllers\Admin\AdvertisementController;
 use App\Http\Controllers\Admin\BillingSettingController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ProviderApprovalController;
@@ -27,6 +29,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/health', [HealthController::class, 'index']);
 
+// Public: currently-live advertisements for the mobile app (unauthenticated, like /health)
+Route::get('/advertisements/active', [PublicAdvertisementController::class, 'active']);
+
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
@@ -41,6 +46,18 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/dashboard')->gr
     Route::get('/summary', [DashboardController::class, 'summary']);
     Route::get('/operations', [DashboardController::class, 'operations']);
     Route::get('/revenue', [DashboardController::class, 'revenue']);
+});
+
+Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/advertisements')->group(function () {
+    Route::get('/', [AdvertisementController::class, 'index']);
+    Route::post('/', [AdvertisementController::class, 'store']);
+    Route::get('/{id}', [AdvertisementController::class, 'show']);
+    // POST (optionally with _method=PUT) required to replace the image — PHP cannot
+    // parse multipart/form-data on a real PUT request. PUT is accepted for JSON-only edits.
+    Route::match(['put', 'post'], '/{id}', [AdvertisementController::class, 'update']);
+    Route::delete('/{id}', [AdvertisementController::class, 'destroy']);
+    Route::post('/{id}/activate', [AdvertisementController::class, 'activate']);
+    Route::post('/{id}/deactivate', [AdvertisementController::class, 'deactivate']);
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/billing')->group(function () {
