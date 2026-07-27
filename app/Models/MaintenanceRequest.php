@@ -1,5 +1,7 @@
 <?php
 
+// للتذكير: هذا الملف يمثل طلب الصيانة وعلاقاته (المركبة، الصور، العروض، مهمة الخدمة).
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -15,14 +17,12 @@ class MaintenanceRequest extends Model
         'status',
         'cancellation_reason',
         'cancelled_at',
-        'accepted_quotation_id',
     ];
 
     protected $casts = [
         'preferred_date' => 'date',
         'cancelled_at' => 'datetime',
     ];
-
 
     public function user()
     {
@@ -49,7 +49,6 @@ class MaintenanceRequest extends Model
         return $this->hasOne(ServiceJob::class);
     }
 
-
     public function maintenanceRecord()
     {
         return $this->hasOneThrough(
@@ -61,7 +60,6 @@ class MaintenanceRequest extends Model
             'id'
         );
     }
-
 
     public function maintenanceRecordSimple()
     {

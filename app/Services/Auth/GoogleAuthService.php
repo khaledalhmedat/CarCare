@@ -1,5 +1,7 @@
 <?php
 
+// للتذكير: هذا الملف مسؤول عن تسجيل الدخول عبر جوجل: ربط أو إنشاء المستخدم وإصدار التوكن.
+
 namespace App\Services\Auth;
 
 use App\Exceptions\GoogleAuthException;
@@ -19,12 +21,6 @@ class GoogleAuthService
         protected AuthRepositoryInterface $authRepository
     ) {}
 
-    /**
-     * Authenticate (or provision) a user from a verified Google ID token and
-     * return the same token payload shape as normal login.
-     *
-     * @throws GoogleAuthException
-     */
     public function loginWithIdToken(string $idToken): array
     {
         $claims = $this->verifier->verify($idToken);
@@ -39,7 +35,6 @@ class GoogleAuthService
             throw GoogleAuthException::inactiveAccount();
         }
 
-        // issues a fresh token and revokes previous ones — identical to normal login
         $token = $this->authRepository->createToken($user);
 
         return [
@@ -54,7 +49,6 @@ class GoogleAuthService
         $existing = $this->userRepository->findByEmail($claims['email']);
 
         if ($existing) {
-            // link an existing password account only if Google has verified the email
             if (!$claims['email_verified']) {
                 throw GoogleAuthException::unverifiedEmail();
             }
@@ -71,24 +65,20 @@ class GoogleAuthService
             return $existing;
         }
 
-        // create a new account only from a Google-verified email
         if (!$claims['email_verified']) {
             throw GoogleAuthException::unverifiedEmail();
         }
 
-        // direct property assignment (no mass assignment) — leaves the User model untouched;
-        // uuid is set by the model's booted() creating hook.
         $user = new User();
         $user->name = $claims['name'];
         $user->email = $claims['email'];
-        $user->password = Hash::make(Str::random(64)); // random, unusable — no password login for social accounts
+        $user->password = Hash::make(Str::random(64));
         $user->status = 'active';
         $user->google_id = $claims['sub'];
         $user->avatar = $claims['avatar'];
         $user->email_verified_at = now();
         $user->save();
 
-        // default customer role only — never a provider role, never bypassing approval
         $role = Role::where('slug', 'user')->first();
         if ($role && !$user->hasRole('user')) {
             $user->roles()->attach($role->id);

@@ -1,5 +1,7 @@
 <?php
 
+// للتذكير: هذا الملف مسؤول عن منطق إعادة تعيين كلمة المرور عبر رمز OTP.
+
 namespace App\Services\Auth;
 
 use App\Models\PasswordResetOtp;
@@ -18,25 +20,18 @@ class PasswordResetService
 
     public function __construct(protected UserRepositoryInterface $userRepository) {}
 
-    /**
-     * Generate + store (hashed) a fresh OTP and email it. Never reveals whether the
-     * email exists, never returns the OTP, never fails just because mail is down.
-     */
     public function requestOtp(string $email): void
     {
         $user = $this->userRepository->findByEmail($email);
 
-        // silently no-op for unknown emails — caller always returns a generic message
         if (!$user) {
             return;
         }
 
-        // invalidate any previous unused OTPs for this email
         PasswordResetOtp::where('email', $email)
             ->whereNull('used_at')
             ->update(['used_at' => now()]);
 
-        // secure 6-digit numeric OTP (may legitimately start with 0)
         $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 
         PasswordResetOtp::create([
@@ -46,7 +41,6 @@ class PasswordResetService
             'attempts_count' => 0,
         ]);
 
-        // attempt delivery; a mail failure must not break the endpoint
         try {
             $user->notify(new PasswordResetOtpNotification($otp, self::OTP_TTL_MINUTES));
         } catch (\Throwable $e) {
@@ -56,16 +50,11 @@ class PasswordResetService
             ]);
         }
 
-        // local/testing convenience only — never logged in production
         if (app()->environment(['local', 'testing'])) {
             Log::info('Password reset OTP (development only)', ['email' => $email, 'otp' => $otp]);
         }
     }
 
-    /**
-     * Verify the OTP and, on success, issue a short-lived reset token (hashed at rest).
-     * Returns the plaintext reset token to hand back to the client.
-     */
     public function verifyOtp(string $email, string $otp): string
     {
         $record = PasswordResetOtp::where('email', $email)
@@ -98,9 +87,6 @@ class PasswordResetService
         return $resetToken;
     }
 
-    /**
-     * Consume a verified reset token, set the new password, and revoke all sessions.
-     */
     public function resetPassword(string $email, string $resetToken, string $password): void
     {
         $record = PasswordResetOtp::where('email', $email)
@@ -126,16 +112,11 @@ class PasswordResetService
 
         $this->userRepository->update($user, ['password' => Hash::make($password)]);
 
-        // consume the record so it cannot be reused
         $record->update(['used_at' => now()]);
 
-        // revoke all existing Sanctum tokens — force re-login everywhere
         $user->tokens()->delete();
     }
 
-    /**
-     * @throws ValidationException  renders as the standard 422 via the exception handler
-     */
     protected function fail(string $field, string $message): never
     {
         throw ValidationException::withMessages([$field => [$message]]);

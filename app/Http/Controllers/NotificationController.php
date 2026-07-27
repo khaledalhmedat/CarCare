@@ -1,5 +1,7 @@
 <?php
 
+// للتذكير: هذا الملف يوفر واجهات الإشعارات للمستخدم الحالي (قائمة، عدد غير المقروء، قراءة، حذف).
+
 namespace App\Http\Controllers;
 
 use App\Http\Resources\NotificationResource;
@@ -8,10 +10,6 @@ use Illuminate\Http\Request;
 
 class NotificationController extends Controller
 {
-    /**
-     * The current user's notifications (paginated, latest first).
-     * Optional filters: unread=true, type=<type>.
-     */
     public function index(Request $request): JsonResponse
     {
         $query = $request->user()->notifications();
@@ -49,7 +47,6 @@ class NotificationController extends Controller
 
     public function show(Request $request, string $id): JsonResponse
     {
-        // scoped to the current user — other users' notifications resolve to null
         $notification = $request->user()->notifications()->find($id);
 
         if (!$notification) {

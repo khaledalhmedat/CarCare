@@ -1,13 +1,11 @@
 <?php
 
+// للتذكير: هذا الملف يعرض الحقول العامة الآمنة للإعلان لتطبيق الجوال فقط.
+
 namespace App\Http\Resources;
 
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/**
- * Minimal public shape for the mobile app — no admin/audit fields
- * (created_by/updated_by, timestamps, image_path, is_active).
- */
 class PublicAdvertisementResource extends JsonResource
 {
     public function toArray($request): array

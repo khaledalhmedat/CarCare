@@ -1,5 +1,7 @@
 <?php
 
+// للتذكير: هذا الملف مسؤول عن حفظ إشعارات المستخدم وبثّها لحظياً عبر Reverb بشكل آمن.
+
 namespace App\Services;
 
 use App\Events\NotificationCreated;
@@ -10,13 +12,6 @@ use Illuminate\Support\Str;
 
 class NotificationService
 {
-    /**
-     * Store an in-app notification for a user and attempt real-time delivery.
-     *
-     * The database write is the source of truth; the Reverb broadcast is best-effort.
-     * Neither a broadcasting failure nor a storage failure is ever re-thrown to the
-     * caller, so a business operation is never broken by notification delivery.
-     */
     public function notifyUser(User $user, string $type, string $title, string $body, array $data = []): ?DatabaseNotification
     {
         $notification = null;
@@ -42,7 +37,6 @@ class NotificationService
             return null;
         }
 
-        // real-time delivery is best-effort — if Reverb is down/unconfigured, swallow + log
         try {
             broadcast(new NotificationCreated($user->id, [
                 'id' => $notification->id,

@@ -1,5 +1,7 @@
 <?php
 
+// للتذكير: هذا الملف يبثّ إشعاراً واحداً لحظياً على قناة المستخدم الخاصة.
+
 namespace App\Events;
 
 use Illuminate\Broadcasting\InteractsWithSockets;
@@ -8,12 +10,6 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-/**
- * Real-time delivery of a single in-app notification.
- *
- * Implements ShouldBroadcastNow so it broadcasts immediately (synchronously) and
- * never depends on a queue worker running. Emitted on a private per-user channel.
- */
 class NotificationCreated implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
