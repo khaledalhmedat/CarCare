@@ -132,7 +132,9 @@ class MaintenanceRequestService
     {
         return $user->maintenanceRequests()
             ->where('status', 'completed')
-            ->with(['vehicle', 'maintenanceRecord'])
+            // serviceJob.maintenanceRecord is read by the resource for completed requests;
+            // eager-load it to avoid an N+1 across the list
+            ->with(['vehicle', 'maintenanceRecord', 'serviceJob.maintenanceRecord'])
             ->latest()
             ->get();
     }

@@ -382,8 +382,37 @@ class BillingService
                 $query->where('p.status', $filters['provider_status']);
             }
 
-            foreach ($query->get() as $provider) {
-                $row = $this->buildProviderStatusRow($type, $provider, $nameCol);
+            $providers = $query->get();
+            if ($providers->isEmpty()) {
+                continue;
+            }
+
+            // batch-load settings + invoices for all providers of this type (avoids N+1):
+            // two queries per type instead of two queries per provider.
+            $providerIds = $providers->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+            $settingsByProvider = ProviderBillingSetting::where('provider_type', $type)
+                ->whereIn('provider_id', $providerIds)
+                ->where('is_active', true)
+                ->orderByDesc('id')
+                ->get()
+                ->groupBy('provider_id')
+                ->map(fn ($group) => $group->first()); // highest id = latest active
+
+            $invoicesByProvider = ProviderInvoice::where('provider_type', $type)
+                ->whereIn('provider_id', $providerIds)
+                ->get()
+                ->groupBy('provider_id');
+
+            foreach ($providers as $provider) {
+                $pid = (int) $provider->id;
+                $row = $this->buildProviderStatusRow(
+                    $type,
+                    $provider,
+                    $nameCol,
+                    $settingsByProvider->get($pid),
+                    $invoicesByProvider->get($pid) ?? collect()
+                );
 
                 if (!empty($filters['billing_status']) && $row['billing_status'] !== $filters['billing_status']) {
                     continue;
@@ -395,14 +424,8 @@ class BillingService
         return $rows;
     }
 
-    protected function buildProviderStatusRow(string $type, object $provider, ?string $nameCol): array
+    protected function buildProviderStatusRow(string $type, object $provider, ?string $nameCol, ?ProviderBillingSetting $setting, $invoices): array
     {
-        $setting = ProviderBillingSetting::where('provider_type', $type)
-            ->where('provider_id', $provider->id)
-            ->where('is_active', true)
-            ->latest('id')
-            ->first();
-
         $name = $nameCol ? ($provider->provider_name ?? null) : ($provider->user_name ?? null);
         $name = $name ?: ($provider->user_name ?? null);
 
@@ -430,11 +453,7 @@ class BillingService
             ]);
         }
 
-        // invoice aggregates
-        $invoices = ProviderInvoice::where('provider_type', $type)
-            ->where('provider_id', $provider->id)
-            ->get();
-
+        // invoice aggregates (from the pre-loaded collection — no per-provider query)
         $unpaid = $invoices->filter(fn ($i) => $i->isUnpaid());
         $overdue = $unpaid->filter(fn ($i) => $i->isOverdue());
 
