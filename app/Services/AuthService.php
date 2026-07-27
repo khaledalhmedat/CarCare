@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Repositories\Contracts\AuthRepositoryInterface;
 use App\Http\Resources\UserResource;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class AuthService
@@ -73,6 +74,36 @@ class AuthService
         return [
             'success' => true,
             'user' => new UserResource($user->load(['tenant', 'roles.permissions']))
+        ];
+    }
+
+    public function updateProfileImage($user, $file): array
+    {
+        if ($user->avatar) {
+            Storage::disk('public')->delete($user->avatar);
+        }
+
+        $path = $file->store('users/profile-images', 'public');
+        $user->update(['avatar' => $path]);
+
+        return [
+            'success' => true,
+            'message' => 'تم تحديث صورة الملف الشخصي بنجاح',
+            'user' => new UserResource($user->fresh()->load(['tenant', 'roles'])),
+        ];
+    }
+
+    public function deleteProfileImage($user): array
+    {
+        if ($user->avatar) {
+            Storage::disk('public')->delete($user->avatar);
+            $user->update(['avatar' => null]);
+        }
+
+        return [
+            'success' => true,
+            'message' => 'تم حذف صورة الملف الشخصي',
+            'user' => new UserResource($user->fresh()->load(['tenant', 'roles'])),
         ];
     }
 }

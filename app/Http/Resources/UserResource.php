@@ -1,5 +1,7 @@
 <?php
 
+// للتذكير: هذا الملف يُنسّق بيانات المستخدم الآمنة لواجهات المصادقة.
+
 namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
@@ -16,6 +18,8 @@ class UserResource extends JsonResource
             'email' => $this->email,
             'phone' => $this->phone,
             'status' => $this->status,
+            'profile_image_path' => $this->avatar,
+            'profile_image_url' => $this->avatar ? asset('storage/' . $this->avatar) : null,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
 
