@@ -26,6 +26,7 @@ class HealthController extends Controller
             'status' => 'ok',
             'app' => config('app.name'),
             'database' => $databaseStatus,
+            'instance' => config('app.instance', 'app'),
             'server_time' => now()->toIso8601String(),
         ]);
     }
