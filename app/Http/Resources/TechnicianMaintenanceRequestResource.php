@@ -18,19 +18,19 @@ class TechnicianMaintenanceRequestResource extends JsonResource
             'status' => $this->status,
             'status_text' => $this->getStatusText(),
 
-            'customer' => [
+            'customer' => $this->user ? [
                 'id' => $this->user->id,
                 'name' => $this->user->name,
                 'phone' => $this->user->phone,
-            ],
+            ] : null,
 
-            'vehicle' => [
+            'vehicle' => $this->vehicle ? [
                 'id' => $this->vehicle->id,
                 'brand' => $this->vehicle->brand,
                 'model' => $this->vehicle->model,
                 'year' => $this->vehicle->year,
                 'plate_number' => $this->vehicle->plate_number,
-            ],
+            ] : null,
 
             'images' => $this->whenLoaded('photos', function () {
                 return $this->photos->map(function ($photo) {
@@ -42,8 +42,14 @@ class TechnicianMaintenanceRequestResource extends JsonResource
             }, []),
 
             'my_quotation' => $this->whenLoaded('quotations', function () use ($request) {
+                $technicianId = $request->user()?->technician?->id;
+
+                if (!$technicianId) {
+                    return null;
+                }
+
                 $myQuotation = $this->quotations
-                    ->where('technician_id', $request->user()->technician->id)
+                    ->where('technician_id', $technicianId)
                     ->first();
 
                 return $myQuotation ? new TechnicianQuotationResource($myQuotation) : null;
