@@ -21,15 +21,13 @@ class SosService
 
     public function createRequest(User $user, array $data): SosRequest
     {
-        try {
-            DB::beginTransaction();
+        $vehicle = $user->vehicles()->find($data['vehicle_id']);
+        if (!$vehicle) {
+            throw new \Exception('المركبة غير موجودة');
+        }
 
-            $vehicle = $user->vehicles()->find($data['vehicle_id']);
-            if (!$vehicle) {
-                throw new \Exception('المركبة غير موجودة');
-            }
-
-            $sosRequest = $this->repository->createForUser($user, [
+        $sosRequest = DB::transaction(function () use ($user, $data) {
+            return $this->repository->createForUser($user, [
                 'vehicle_id' => $data['vehicle_id'],
                 'lat' => $data['lat'],
                 'lng' => $data['lng'],
@@ -38,7 +36,16 @@ class SosService
                 'status' => 'open',
                 'priority' => 'emergency',
             ]);
+        });
 
+        $this->notifyTechnicians($sosRequest, $data);
+
+        return $sosRequest->load(['vehicle']);
+    }
+
+    protected function notifyTechnicians(SosRequest $sosRequest, array $data): void
+    {
+        try {
             $nearbyTechnicians = $this->getNearbyTechnicians($data['lat'], $data['lng'], 30);
 
             if ($nearbyTechnicians->isNotEmpty()) {
@@ -50,41 +57,44 @@ class SosService
                     'sos_id' => $sosRequest->id,
                     'technicians' => $nearbyTechnicians->pluck('id')->toArray()
                 ]);
-            } else {
-                $city = $data['city'] ?? null;
 
-                if ($city) {
-                    $cityTechnicians = Technician::where('is_available', true)
-                        ->where('status', 'approved')
-                        ->where('city', $city)
-                        ->get();
-
-                    if ($cityTechnicians->isNotEmpty()) {
-                        foreach ($cityTechnicians as $technician) {
-                            broadcast(new NewSosRequest($sosRequest, $technician, null));
-                        }
-
-                        Log::info('✅ SOS: Notified ' . $cityTechnicians->count() . ' technicians in city: ' . $city, [
-                            'sos_id' => $sosRequest->id,
-                            'technicians' => $cityTechnicians->pluck('id')->toArray()
-                        ]);
-                    } else {
-                        Log::warning('❌ SOS: No technicians found in city: ' . $city, [
-                            'sos_id' => $sosRequest->id
-                        ]);
-                    }
-                } else {
-                    Log::warning('❌ SOS: No city provided and no nearby technicians', [
-                        'sos_id' => $sosRequest->id
-                    ]);
-                }
+                return;
             }
 
-            DB::commit();
-            return $sosRequest->load(['vehicle']);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            throw $e;
+            $city = $data['city'] ?? null;
+
+            if (!$city) {
+                Log::warning('❌ SOS: No city provided and no nearby technicians', [
+                    'sos_id' => $sosRequest->id
+                ]);
+
+                return;
+            }
+
+            $cityTechnicians = Technician::where('is_available', true)
+                ->where('status', 'approved')
+                ->where('city', $city)
+                ->get();
+
+            if ($cityTechnicians->isNotEmpty()) {
+                foreach ($cityTechnicians as $technician) {
+                    broadcast(new NewSosRequest($sosRequest, $technician, null));
+                }
+
+                Log::info('✅ SOS: Notified ' . $cityTechnicians->count() . ' technicians in city: ' . $city, [
+                    'sos_id' => $sosRequest->id,
+                    'technicians' => $cityTechnicians->pluck('id')->toArray()
+                ]);
+            } else {
+                Log::warning('❌ SOS: No technicians found in city: ' . $city, [
+                    'sos_id' => $sosRequest->id
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('sos.notify_failed', [
+                'sos_id' => $sosRequest->id,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 
