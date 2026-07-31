@@ -18,6 +18,7 @@ use App\Http\Controllers\Technician\TechnicianMaintenanceController;
 use App\Http\Controllers\TechnicianSos\TechnicianSosController;
 use App\Http\Controllers\Tracking\TrackingController;
 use App\Http\Controllers\Vehicle\VehicleController;
+use App\Http\Controllers\AI\ChatController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -192,7 +193,6 @@ Route::middleware(['auth:sanctum', 'role:technician'])->prefix('technician')->gr
     Route::post('/location', [TechnicianController::class, 'updateLocation']);
 });
 
-// routes/api.php
 
 Route::middleware(['auth:sanctum'])->prefix('fuel_provider')->group(function () {
     Route::get('/my_profile', [FuelProviderController::class, 'myProfile']);
@@ -225,7 +225,6 @@ Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
     Route::get('/fuel_orders/{id}/track', [FuelOrderController::class, 'trackProvider']);
 });
 
-// routes/api.php
 
 Route::middleware(['auth:sanctum'])->prefix('shop')->group(function () {
     Route::get('/profile', [ShopController::class, 'profile']);
@@ -247,7 +246,6 @@ Route::middleware(['auth:sanctum'])->prefix('shop')->group(function () {
     });
 });
 
-// routes/api.php
 
 Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
 
@@ -269,4 +267,11 @@ Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
 
     Route::get('/orders/{id}/track', [CustomerShopController::class, 'trackDelivery']);
 
+});
+
+
+Route::middleware('auth:sanctum')->prefix('chat')->group(function () {
+    Route::post('/', [ChatController::class, 'sendMessage']);
+    Route::get('/history', [ChatController::class, 'history']);
+    Route::delete('/history', [ChatController::class, 'deleteHistory']);
 });

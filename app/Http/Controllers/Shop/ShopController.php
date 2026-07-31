@@ -19,9 +19,7 @@ class ShopController extends Controller
 {
     public function __construct(protected ShopService $shopService) {}
 
-    /**
-     * عرض معلومات متجري
-     */
+    
     public function profile(Request $request)
     {
         $shop = $this->shopService->getProfile($request->user());
@@ -39,9 +37,7 @@ class ShopController extends Controller
         ]);
     }
 
-    /**
-     * إضافة/تحديث معلومات المتجر
-     */
+    
     public function storeOrUpdateProfile(StoreShopRequest $request)
     {
         $shop = $this->shopService->createOrUpdateShop($request->user(), $request->validated());
@@ -53,9 +49,7 @@ class ShopController extends Controller
         ]);
     }
 
-    /**
-     * عرض منتجاتي
-     */
+    
     public function products(Request $request)
     {
         $products = $this->shopService->getShopProducts($request->user());
@@ -71,9 +65,7 @@ class ShopController extends Controller
         ]);
     }
 
-    /**
-     * إضافة منتج
-     */
+    
     public function storeProduct(StoreProductRequest $request)
     {
         $data = $request->validated();
@@ -88,9 +80,6 @@ class ShopController extends Controller
         ], 201);
     }
 
-    /**
-     * تعديل منتج
-     */
     public function updateProduct(UpdateProductRequest $request, int $id)
     {
         $data = $request->validated();
@@ -105,9 +94,7 @@ class ShopController extends Controller
         ]);
     }
 
-    /**
-     * حذف منتج
-     */
+    
     public function deleteProduct(Request $request, int $id)
     {
         $this->shopService->deleteProduct($request->user(), $id);
@@ -118,9 +105,7 @@ class ShopController extends Controller
         ]);
     }
 
-    /**
- * عرض الطلبيات الواردة
- */
+ 
 public function orders(Request $request)
 {
     $orders = $this->shopService->getShopOrders($request->user(), $request->status);
@@ -136,9 +121,7 @@ public function orders(Request $request)
     ]);
 }
 
-/**
- * عرض تفاصيل طلبية واردة
- */
+
 public function orderDetails(Request $request, int $id)
 {
     $order = $this->shopService->getShopOrder($request->user(), $id);
@@ -149,9 +132,7 @@ public function orderDetails(Request $request, int $id)
     ]);
 }
 
-/**
- * قبول طلبية
- */
+
 public function acceptOrder(Request $request, int $id)
 {
     $order = $this->shopService->acceptOrder($request->user(), $id);
@@ -163,9 +144,7 @@ public function acceptOrder(Request $request, int $id)
     ]);
 }
 
-/**
- * رفض طلبية
- */
+
 public function rejectOrder(Request $request, int $id)
 {
     $request->validate(['reason' => 'required|string|min:5']);
@@ -179,9 +158,7 @@ public function rejectOrder(Request $request, int $id)
     ]);
 }
 
-/**
- * تحديث حالة الطلبية (processing, out_for_delivery, delivered)
- */
+
 public function updateOrderStatus(UpdateOrderStatusRequest $request, int $id)
 {
     $order = $this->shopService->updateOrderStatus(
@@ -198,9 +175,7 @@ public function updateOrderStatus(UpdateOrderStatusRequest $request, int $id)
     ]);
 }
 
-/**
- * مشاركة موقع المندوب
- */
+
 public function shareDeliveryLocation(ShareDeliveryLocationRequest $request, int $id)
 {
     $point = $this->shopService->shareDeliveryLocation(
@@ -221,9 +196,7 @@ public function shareDeliveryLocation(ShareDeliveryLocationRequest $request, int
     ]);
 }
 
-/**
- * تتبع موقع التوصيل (للمستخدم)
- */
+
 public function trackDelivery(Request $request, int $id)
 {
     $tracking = $this->shopService->getDeliveryTracking($request->user(), $id);
