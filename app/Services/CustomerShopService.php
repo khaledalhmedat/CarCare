@@ -12,7 +12,6 @@ class CustomerShopService
 {
     public function __construct(protected CustomerShopRepositoryInterface $repository) {}
 
-    // ========== Shops ==========
     public function getShops(array $filters)
     {
         return $this->repository->getShops($filters);
@@ -36,7 +35,6 @@ class CustomerShopService
         return $this->repository->getShopProducts($shopId, $filters);
     }
 
-    // ========== Products ==========
     public function getProducts(array $filters)
     {
         return $this->repository->getProducts($filters);
@@ -51,7 +49,6 @@ class CustomerShopService
         return $product;
     }
 
-    // ========== Cart ==========
     public function getCart(User $user)
     {
         return $this->repository->getCart($user);
@@ -99,7 +96,6 @@ class CustomerShopService
         return $this->repository->removeFromCart($cartItem);
     }
 
-    // ========== Orders ==========
     public function createOrder(User $user, array $data): Order
     {
         try {
@@ -110,12 +106,10 @@ class CustomerShopService
                 throw new \Exception('السلة فارغة');
             }
 
-            // حساب المجموع
             $totalPrice = $cartItems->sum(function($item) {
                 return $item->product->final_price * $item->quantity;
             });
 
-            // التأكد من أن جميع المنتجات من نفس المتجر
             $shopId = $cartItems->first()->product->shop_id;
             foreach ($cartItems as $item) {
                 if ($item->product->shop_id !== $shopId) {
@@ -123,7 +117,6 @@ class CustomerShopService
                 }
             }
 
-            // إنشاء الطلب
             $order = $this->repository->createOrder($user, [
                 'user_id' => $user->id,
                 'shop_id' => $shopId,
@@ -134,7 +127,6 @@ class CustomerShopService
                 'status' => 'pending',
             ]);
 
-            // إنشاء عناصر الطلب
             foreach ($cartItems as $item) {
                 $order->items()->create([
                     'product_id' => $item->product_id,
@@ -142,11 +134,9 @@ class CustomerShopService
                     'price' => $item->product->final_price,
                 ]);
 
-                // تقليل الكمية
                 $item->product->decrement('stock_quantity', $item->quantity);
             }
 
-            // تفريغ السلة
             $this->repository->clearCart($user);
 
             DB::commit();
@@ -183,9 +173,7 @@ class CustomerShopService
         return $this->repository->cancelOrder($order, $reason);
     }
 
-    /**
- * تتبع موقع التوصيل (للمستخدم)
- */
+    
 public function getDeliveryTracking(User $user, int $orderId)
 {
     $order = Order::with(['deliveryTrackingPoints', 'shop'])

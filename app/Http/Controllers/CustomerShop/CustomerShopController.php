@@ -91,9 +91,7 @@ class CustomerShopController extends Controller
         ]);
     }
 
-    /**
- * تتبع موقع التوصيل (للمستخدم)
- */
+    
 public function trackDelivery(Request $request, int $id)
 {
     $tracking = $this->shopService->getDeliveryTracking($request->user(), $id);

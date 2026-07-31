@@ -39,7 +39,6 @@ class ShopService
                 $user->roles()->attach($role->id);
             }
 
-            // تحديث العلاقات
             if (isset($data['business_types'])) {
                 $shop->businessTypes()->sync($data['business_types']);
             }
@@ -71,7 +70,6 @@ class ShopService
 
             $product = $this->repository->createProduct($shop, $data);
 
-            // رفع الصور
             if ($imageFiles) {
                 foreach ($imageFiles as $index => $image) {
                     $path = $image->store('products', 'public');
@@ -108,7 +106,6 @@ class ShopService
 
             $this->repository->updateProduct($product, $data);
 
-            // رفع صور جديدة
             if ($imageFiles) {
                 foreach ($imageFiles as $image) {
                     $path = $image->store('products', 'public');
@@ -140,7 +137,6 @@ class ShopService
             throw new \Exception('المنتج غير موجود أو لا يخصك');
         }
 
-        // حذف الصور
         foreach ($product->images as $image) {
             Storage::disk('public')->delete($image->image_path);
             $image->delete();
@@ -158,9 +154,7 @@ class ShopService
         return $this->repository->getShopProducts($shop);
     }
 
-    /**
- * عرض الطلبيات الواردة للمتجر
- */
+    
 public function getShopOrders(User $user, ?string $status = null)
 {
     $shop = $this->repository->findByUser($user);
@@ -170,9 +164,6 @@ public function getShopOrders(User $user, ?string $status = null)
     return $this->repository->getShopOrders($shop, $status);
 }
 
-/**
- * عرض تفاصيل طلبية واردة
- */
 public function getShopOrder(User $user, int $orderId): Order
 {
     $shop = $this->repository->findByUser($user);
@@ -187,9 +178,7 @@ public function getShopOrder(User $user, int $orderId): Order
     return $order;
 }
 
-/**
- * قبول طلبية
- */
+
 public function acceptOrder(User $user, int $orderId): Order
 {
     $shop = $this->repository->findByUser($user);
@@ -210,9 +199,6 @@ public function acceptOrder(User $user, int $orderId): Order
     return $order->fresh();
 }
 
-/**
- * رفض طلبية
- */
 public function rejectOrder(User $user, int $orderId, string $reason): Order
 {
     $order = $this->getShopOrder($user, $orderId);
@@ -225,9 +211,7 @@ public function rejectOrder(User $user, int $orderId, string $reason): Order
     return $order->fresh();
 }
 
-/**
- * تحديث حالة الطلبية (processing, out_for_delivery, delivered)
- */
+
 public function updateOrderStatus(User $user, int $orderId, string $status, ?string $notes = null): Order
 {
     $order = $this->getShopOrder($user, $orderId);
@@ -237,7 +221,6 @@ public function updateOrderStatus(User $user, int $orderId, string $status, ?str
         throw new \Exception('الحالة غير صحيحة');
     }
 
-    // التحقق من التسلسل
     if ($status === 'processing' && $order->status !== 'accepted') {
         throw new \Exception('لا يمكن تجهيز طلب لم يتم قبوله بعد');
     }
@@ -252,9 +235,7 @@ public function updateOrderStatus(User $user, int $orderId, string $status, ?str
     return $order->fresh();
 }
 
-/**
- * مشاركة موقع المندوب
- */
+
 public function shareDeliveryLocation(User $user, int $orderId, float $lat, float $lng)
 {
     $shop = $this->repository->findByUser($user);
@@ -273,23 +254,16 @@ public function shareDeliveryLocation(User $user, int $orderId, float $lat, floa
 
     $point = $this->repository->saveDeliveryLocation($order, $shop, $lat, $lng);
 
-    // ✅ بث الموقع للمستخدم عبر WebSocket
-    // broadcast(new DeliveryLocationUpdated($order, $lat, $lng));
+
 
     return $point;
 }
 
 
 
-/**
- * تتبع موقع التوصيل (للمستخدم)
- */
-/**
- * تتبع موقع التوصيل (للمستخدم)
- */
+
 public function getDeliveryTracking(User $user, int $orderId)
 {
-    // ✅ استخدم الدالة مباشرة بدل getOrderDetails
     $order = Order::with(['deliveryTrackingPoints', 'shop'])
         ->where('user_id', $user->id)
         ->find($orderId);
