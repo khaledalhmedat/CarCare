@@ -213,9 +213,15 @@ class TechnicianSosService
             'cancellation_reason' => $reason,
         ]);
 
-        broadcast(new SosRequestCancelled($sosRequest, $technician, $reason));
-
-        broadcast(new NewSosRequest($sosRequest, null, null));
+        try {
+            broadcast(new SosRequestCancelled($sosRequest, $technician, $reason));
+            broadcast(new NewSosRequest($sosRequest, null, null));
+        } catch (\Throwable $e) {
+            Log::warning('technician_sos.cancel.broadcast_failed', [
+                'sos_id' => $sosRequest->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return $sosRequest->fresh();
     }

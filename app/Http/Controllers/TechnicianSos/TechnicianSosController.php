@@ -76,7 +76,15 @@ class TechnicianSosController extends Controller
 
     public function cancelRequest(CancelSosRequest $request, int $id)
     {
-        $sosRequest = $this->sosService->cancelRequest($request->user(), $id, $request->cancellation_reason);
+        try {
+            $sosRequest = $this->sosService->cancelRequest($request->user(), $id, $request->cancellation_reason);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'تم إلغاء الطلب وإعادة فتحه',
