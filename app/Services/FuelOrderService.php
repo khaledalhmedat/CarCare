@@ -80,20 +80,18 @@ class FuelOrderService
 
     public function createEmergencyOrder(User $user, array $data): FuelOrder
     {
-        try {
-            DB::beginTransaction();
+        $vehicle = $user->vehicles()->find($data['vehicle_id']);
+        if (!$vehicle) {
+            throw new \Exception('المركبة غير موجودة');
+        }
 
-            $vehicle = $user->vehicles()->find($data['vehicle_id']);
-            if (!$vehicle) {
-                throw new \Exception('المركبة غير موجودة');
-            }
+        $city = $data['city'] ?? $this->getCityFromCoordinates(
+            $data['delivery_latitude'],
+            $data['delivery_longitude']
+        );
 
-            $city = $data['city'] ?? $this->getCityFromCoordinates(
-                $data['delivery_latitude'],
-                $data['delivery_longitude']
-            );
-
-            $order = $this->repository->createForUser($user, [
+        $order = DB::transaction(function () use ($user, $data, $city) {
+            return $this->repository->createForUser($user, [
                 'vehicle_id' => $data['vehicle_id'],
                 'fuel_type' => $data['fuel_type'],
                 'amount' => $data['amount'],
@@ -104,7 +102,16 @@ class FuelOrderService
                 'notes' => $data['notes'] ?? null,
                 'status' => 'pending',
             ]);
+        });
 
+        $this->notifyProviders($order, $city, $data);
+
+        return $order->load(['vehicle']);
+    }
+
+    protected function notifyProviders(FuelOrder $order, ?string $city, array $data): void
+    {
+        try {
             $nearbyProviders = $this->getNearbyFuelProviders(
                 $data['delivery_latitude'],
                 $data['delivery_longitude'],
@@ -123,35 +130,36 @@ class FuelOrderService
                     'order_id' => $order->id,
                     'providers' => $providersNotified
                 ]);
-            } else {
-                $cityProviders = $this->getFuelProvidersByCity($city);
 
-                if ($cityProviders->isNotEmpty()) {
-                    foreach ($cityProviders as $provider) {
-                        broadcast(new NewEmergencyFuelOrder($order, $provider, null));
-                        $providersNotified[] = $provider->id;
-                    }
-
-                    Log::info('Fuel order: ' . $cityProviders->count() . ' city providers notified', [
-                        'order_id' => $order->id,
-                        'city' => $city,
-                        'providers' => $providersNotified
-                    ]);
-                } else {
-                    Log::warning('Fuel order: no providers found (neither nearby nor in same city)', [
-                        'order_id' => $order->id,
-                        'city' => $city,
-                        'lat' => $data['delivery_latitude'],
-                        'lng' => $data['delivery_longitude']
-                    ]);
-                }
+                return;
             }
 
-            DB::commit();
-            return $order->load(['vehicle']);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            throw $e;
+            $cityProviders = $this->getFuelProvidersByCity($city);
+
+            if ($cityProviders->isNotEmpty()) {
+                foreach ($cityProviders as $provider) {
+                    broadcast(new NewEmergencyFuelOrder($order, $provider, null));
+                    $providersNotified[] = $provider->id;
+                }
+
+                Log::info('Fuel order: ' . $cityProviders->count() . ' city providers notified', [
+                    'order_id' => $order->id,
+                    'city' => $city,
+                    'providers' => $providersNotified
+                ]);
+            } else {
+                Log::warning('Fuel order: no providers found (neither nearby nor in same city)', [
+                    'order_id' => $order->id,
+                    'city' => $city,
+                    'lat' => $data['delivery_latitude'],
+                    'lng' => $data['delivery_longitude']
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('fuel.emergency_order.broadcast_failed', [
+                'fuel_order_id' => $order->id ?? null,
+                'message' => $e->getMessage(),
+            ]);
         }
     }
 
