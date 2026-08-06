@@ -7,6 +7,7 @@ use App\Http\Requests\FuelOrder\StoreFuelOrderRequest;
 use App\Http\Resources\FuelOrderResource;
 use App\Services\FuelOrderService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use App\Http\Requests\FuelOrder\StoreEmergencyFuelOrderRequest;
 
 
@@ -52,10 +53,14 @@ class FuelOrderController extends Controller
                 'message' => 'تم إرسال طلب الوقود الطارئ بنجاح',
                 'data' => new FuelOrderResource($order)
             ], 201);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            Log::warning('fuel.emergency_order.create_failed', [
+                'message' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => 'حدث خطأ أثناء إنشاء طلب الوقود، حاول مرة أخرى'
             ], 500);
         }
     }
