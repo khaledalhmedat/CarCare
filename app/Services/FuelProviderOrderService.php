@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Models\FuelOrder;
+use App\Models\FuelProvider;
 use App\Repositories\Contracts\FuelOrderRepositoryInterface;
 use App\Events\FuelOrderAccepted;
 use App\Events\FuelOrderStatusUpdated;
@@ -26,22 +27,48 @@ class FuelProviderOrderService
 
 
 
-    public function getAvailableOrders(?string $city = null, ?float $lat = null, ?float $lng = null)
+    public function getAvailableOrders(?FuelProvider $provider)
     {
+        $empty = FuelOrder::whereRaw('1 = 0')->paginate(15);
+
+        // مزود الوقود يجب أن يكون موجوداً ومعتمداً ومتاحاً حتى يرى الطلبات
+        if (!$provider || $provider->status !== 'approved' || !$provider->is_available) {
+            return $empty;
+        }
+
+        // إذا لم يحدد المزود أنواع الوقود التي يوفرها، فلا يرى أي طلب
+        $fuelTypes = $provider->fuel_types ?? [];
+        if (empty($fuelTypes)) {
+            return $empty;
+        }
+
+        $city = $provider->city;
+        $lat = $provider->latitude;
+        $lng = $provider->longitude;
+
         $query = FuelOrder::where('status', 'pending')
+            ->whereIn('fuel_type', $fuelTypes)
             ->with(['user', 'vehicle'])
             ->latest();
-
-        if ($city) {
-            $query->where('city', $city);
-        }
 
         if ($lat && $lng) {
             $haversine = "(6371 * acos(cos(radians(?)) * cos(radians(delivery_latitude)) * cos(radians(delivery_longitude) - radians(?)) + sin(radians(?)) * sin(radians(delivery_latitude))))";
 
-            $query->selectRaw("*, {$haversine} AS distance", [$lat, $lng, $lat])
-                ->having('distance', '<=', 30)
-                ->orderBy('distance');
+            // الطلب يظهر إذا كان قريباً (إحداثيات موجودة ضمن 30 كم) أو في نفس مدينة المزود
+            // (الطلبات بدون إحداثيات لا تُستبعد بصمت، بل تُطابق بالمدينة)
+            $query->where(function ($group) use ($lat, $lng, $city, $haversine) {
+                $group->where(function ($near) use ($lat, $lng, $haversine) {
+                    $near->whereNotNull('delivery_latitude')
+                        ->whereNotNull('delivery_longitude')
+                        ->whereRaw("{$haversine} <= 30", [$lat, $lng, $lat]);
+                });
+
+                if ($city) {
+                    $group->orWhere('city', $city);
+                }
+            });
+        } elseif ($city) {
+            $query->where('city', $city);
         }
 
         return $query->paginate(15);

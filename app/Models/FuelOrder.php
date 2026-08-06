@@ -21,6 +21,7 @@ class FuelOrder extends Model
         'delivery_address',
         'delivery_latitude',
         'delivery_longitude',
+        'city',
         'total_price',
         'status',
         'scheduled_time',
