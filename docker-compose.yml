@@ -14,6 +14,24 @@ services:
       - .env
     environment:
       - CONTAINER_ROLE=app
+      - APP_INSTANCE_NAME=app-1
+    networks:
+      - shared_db_net
+
+  app-2:
+    image: carcarex:latest
+    container_name: carcarex-app2
+    restart: always
+    ports:
+      - "8014:9000"
+    volumes:
+      - /opt/carcarex/storage:/var/www/html/storage
+      - /opt/carcarex/bootstrap/cache:/var/www/html/bootstrap/cache
+    env_file:
+      - .env
+    environment:
+      - CONTAINER_ROLE=app2
+      - APP_INSTANCE_NAME=app-2
     networks:
       - shared_db_net
 
