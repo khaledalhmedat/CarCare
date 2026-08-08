@@ -84,6 +84,15 @@ class CarwashService
                 throw new \Exception('المركبة غير موجودة أو لا تخصك');
             }
 
+            // السعر يُحسب من أسعار المغسلة نفسها ولا يُؤخذ من الطلب أبداً
+            $servicePrices = $carWasher->service_prices ?? [];
+            if (!array_key_exists($data['service_type'], $servicePrices)) {
+                throw new \Exception('نوع الخدمة غير متوفر لدى هذه المغسلة');
+            }
+
+            $data['price'] = $servicePrices[$data['service_type']];
+            $data['status'] = CarwashBooking::STATUS_PENDING;
+
             $booking = $this->repository->createForUser($user, $data);
 
             DB::commit();
