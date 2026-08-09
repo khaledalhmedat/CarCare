@@ -14,7 +14,10 @@ use Illuminate\Support\Facades\Log;
 
 class TechnicianSosService
 {
-    public function __construct(protected SosRepositoryInterface $repository) {}
+    public function __construct(
+        protected SosRepositoryInterface $repository,
+        protected NotificationService $notifications
+    ) {}
 
 
     private function calculateDistance($lat1, $lon1, $lat2, $lon2)
@@ -148,6 +151,23 @@ class TechnicianSosService
             Log::warning('sos.accept.broadcast_failed', ['sos_id' => $requestId, 'error' => $e->getMessage()]);
         }
 
+        $customer = $sosRequest->user;
+        if ($customer && $customer->id !== $technician->id) {
+            $this->notifications->notifyUser(
+                $customer,
+                'sos_accepted',
+                'تم قبول طلب الطوارئ',
+                'تم قبول طلب الطوارئ الخاص بك، والفني في طريقه إليك',
+                [
+                    'entity_type' => 'sos_request',
+                    'entity_id' => $sosRequest->id,
+                    'action' => 'open_details',
+                    'status' => 'accepted',
+                    'technician_id' => $technician->id,
+                ]
+            );
+        }
+
         return $sosRequest->fresh(['user', 'vehicle']);
     }
 
@@ -187,6 +207,39 @@ class TechnicianSosService
             Log::warning('sos.status.broadcast_failed', ['sos_id' => $requestId, 'error' => $e->getMessage()]);
         }
 
+        $customer = $sosRequest->user;
+        if ($customer && $customer->id !== $technician->id) {
+            if ($status === 'in_progress') {
+                $this->notifications->notifyUser(
+                    $customer,
+                    'sos_in_progress',
+                    'بدأ تنفيذ طلب الطوارئ',
+                    'بدأ الفني تنفيذ خدمة الطوارئ الخاصة بك',
+                    [
+                        'entity_type' => 'sos_request',
+                        'entity_id' => $sosRequest->id,
+                        'action' => 'open_details',
+                        'status' => 'in_progress',
+                        'technician_id' => $technician->id,
+                    ]
+                );
+            } elseif ($status === 'completed') {
+                $this->notifications->notifyUser(
+                    $customer,
+                    'sos_completed',
+                    'تم إنجاز طلب الطوارئ',
+                    'تم إنجاز خدمة الطوارئ الخاصة بمركبتك',
+                    [
+                        'entity_type' => 'sos_request',
+                        'entity_id' => $sosRequest->id,
+                        'action' => 'open_details',
+                        'status' => 'completed',
+                        'technician_id' => $technician->id,
+                    ]
+                );
+            }
+        }
+
         return $sosRequest->fresh();
     }
 
@@ -221,6 +274,24 @@ class TechnicianSosService
                 'sos_id' => $sosRequest->id,
                 'error' => $e->getMessage(),
             ]);
+        }
+
+        $customer = $sosRequest->user;
+        if ($customer && $customer->id !== $technician->id) {
+            $this->notifications->notifyUser(
+                $customer,
+                'sos_reopened_after_technician_cancel',
+                'تمت إعادة طلب الطوارئ',
+                'ألغى الفني استلام طلب الطوارئ، وتمت إعادة الطلب للبحث عن فني آخر',
+                [
+                    'entity_type' => 'sos_request',
+                    'entity_id' => $sosRequest->id,
+                    'action' => 'open_details',
+                    'status' => 'open',
+                    'technician_id' => $technician->id,
+                    'reason' => $reason,
+                ]
+            );
         }
 
         return $sosRequest->fresh();

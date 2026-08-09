@@ -38,7 +38,7 @@ class SosCancelTest extends TestCase
 
         return SosRequest::create([
             'user_id' => $customer->id, 'vehicle_id' => $vehicle->id,
-            'technician_id' => $techUser->id, 'lat' => 33.54, 'lng' => 36.32, 'status' => $status,
+            'technician_id' => $techUser?->id, 'lat' => 33.54, 'lng' => 36.32, 'status' => $status,
         ]);
     }
 
@@ -89,5 +89,45 @@ class SosCancelTest extends TestCase
             ->assertJson(['success' => false]);
 
         $this->assertEquals('accepted', $sos->fresh()->status);
+    }
+
+    public function test_customer_cancel_of_assigned_sos_notifies_technician_only(): void
+    {
+        $tech = $this->makeTechnician();
+        $sos = $this->makeSos($tech, 'accepted');
+        $customer = $sos->user;
+        Sanctum::actingAs($customer);
+
+        $this->postJson("/api/sos/{$sos->id}/cancel", ['cancellation_reason' => 'لم أعد بحاجة للمساعدة'])
+            ->assertOk()
+            ->assertJson(['success' => true]);
+
+        $this->assertEquals('cancelled', $sos->fresh()->status);
+        $this->assertEquals(1, $tech->notifications()->count());
+        $this->assertEquals(0, $customer->notifications()->count());
+
+        $notification = $tech->notifications()->first();
+        $this->assertEquals('sos_cancelled_by_customer', $notification->type);
+        $this->assertEquals([
+            'entity_type' => 'sos_request',
+            'entity_id' => $sos->id,
+            'action' => 'open_details',
+            'status' => 'cancelled',
+            'reason' => 'لم أعد بحاجة للمساعدة',
+        ], $notification->data['data']);
+    }
+
+    public function test_customer_cancel_of_unassigned_open_sos_creates_no_notification(): void
+    {
+        $sos = $this->makeSos(null, 'open');
+        $customer = $sos->user;
+        Sanctum::actingAs($customer);
+
+        $this->postJson("/api/sos/{$sos->id}/cancel", ['cancellation_reason' => 'لم أعد بحاجة للمساعدة'])
+            ->assertOk()
+            ->assertJson(['success' => true]);
+
+        $this->assertEquals('cancelled', $sos->fresh()->status);
+        $this->assertEquals(0, \Illuminate\Notifications\DatabaseNotification::count());
     }
 }
