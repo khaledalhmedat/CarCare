@@ -12,6 +12,9 @@ use Illuminate\Support\Facades\Log;
 
 class TechnicianMaintenanceService
 {
+    public function __construct(
+        protected NotificationService $notifications
+    ) {}
 
     public function getAvailableRequests(User $user, array $filters = [])
     {
@@ -109,11 +112,32 @@ class TechnicianMaintenanceService
 
             DB::commit();
 
-            return $quotation->fresh();
+            $quotation = $quotation->fresh();
         } catch (\Exception $e) {
             DB::rollBack();
             throw $e;
         }
+
+        $customer = $maintenanceRequest->user;
+        if ($customer && $customer->id !== $user->id) {
+            $this->notifications->notifyUser(
+                $customer,
+                'maintenance_quotation_received',
+                'تم استلام عرض سعر جديد',
+                'تلقيت عرض سعر جديد على طلب الصيانة الخاص بك',
+                [
+                    'entity_type' => 'maintenance_request',
+                    'entity_id' => $maintenanceRequest->id,
+                    'action' => 'open_details',
+                    'status' => 'quoted',
+                    'quotation_id' => $quotation->id,
+                    'technician_id' => $technician->user_id,
+                    'price' => $quotation->price,
+                ]
+            );
+        }
+
+        return $quotation;
     }
 
     public function getMyJobs(User $user, string $status = null)
@@ -190,24 +214,36 @@ class TechnicianMaintenanceService
             throw new \Exception('أنت لست تقنياً');
         }
 
-        $job = ServiceJob::where('id', $jobId)
-            ->where('technician_id', $technician->user_id)
-            ->first();
+        $newStatus = $data['status'];
 
-        if (!$job) {
-            throw new \Exception('المهمة غير موجودة أو لا تخصك');
-        }
+        // فقط الانتقالات التالية مسموحة اعتماداً على الحالة الفعلية المقفلة للسجل:
+        // assigned -> in_progress، و(assigned أو in_progress) -> completed. أي تكرار لنفس الحالة أو الخروج من completed مرفوض.
+        $allowedFrom = [
+            'in_progress' => ['assigned'],
+            'completed' => ['assigned', 'in_progress'],
+        ];
 
-        try {
-            DB::beginTransaction();
+        $job = DB::transaction(function () use ($jobId, $technician, $newStatus, $data, $allowedFrom) {
+            $job = ServiceJob::where('id', $jobId)
+                ->where('technician_id', $technician->user_id)
+                ->lockForUpdate()
+                ->first();
 
-            $job->status = $data['status'];
+            if (!$job) {
+                throw new \Exception('المهمة غير موجودة أو لا تخصك');
+            }
 
-            if ($data['status'] === 'in_progress' && !$job->started_at) {
+            if (!isset($allowedFrom[$newStatus]) || !in_array($job->status, $allowedFrom[$newStatus], true)) {
+                throw new \Exception('لا يمكن تحديث حالة المهمة في وضعها الحالي');
+            }
+
+            $job->status = $newStatus;
+
+            if ($newStatus === 'in_progress' && !$job->started_at) {
                 $job->started_at = now();
             }
 
-            if ($data['status'] === 'completed' && !$job->completed_at) {
+            if ($newStatus === 'completed' && !$job->completed_at) {
                 $job->completed_at = now();
             }
 
@@ -215,11 +251,11 @@ class TechnicianMaintenanceService
 
             $maintenanceRequest = $job->maintenanceRequest;
             if ($maintenanceRequest) {
-                $maintenanceRequest->status = $data['status'] === 'completed' ? 'completed' : 'in_progress';
+                $maintenanceRequest->status = $newStatus === 'completed' ? 'completed' : 'in_progress';
                 $maintenanceRequest->save();
             }
 
-            if ($data['status'] === 'completed') {
+            if ($newStatus === 'completed') {
                 MaintenanceRecord::create([
                     'service_job_id' => $job->id,
                     'vehicle_id' => $maintenanceRequest->vehicle_id,
@@ -232,12 +268,45 @@ class TechnicianMaintenanceService
                 ]);
             }
 
-            DB::commit();
             return $job->fresh(['maintenanceRequest', 'maintenanceRecord']);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            throw $e;
+        });
+
+        $customer = $job->maintenanceRequest?->user;
+        if ($customer && $customer->id !== $user->id) {
+            if ($newStatus === 'in_progress') {
+                $this->notifications->notifyUser(
+                    $customer,
+                    'maintenance_job_in_progress',
+                    'بدأ تنفيذ الصيانة',
+                    'بدأ الفني تنفيذ خدمة الصيانة الخاصة بمركبتك',
+                    [
+                        'entity_type' => 'maintenance_request',
+                        'entity_id' => $job->maintenance_request_id,
+                        'action' => 'open_details',
+                        'status' => 'in_progress',
+                        'service_job_id' => $job->id,
+                        'technician_id' => $user->id,
+                    ]
+                );
+            } elseif ($newStatus === 'completed') {
+                $this->notifications->notifyUser(
+                    $customer,
+                    'maintenance_job_completed',
+                    'تم إنجاز الصيانة',
+                    'تم إنجاز صيانة مركبتك بنجاح',
+                    [
+                        'entity_type' => 'maintenance_request',
+                        'entity_id' => $job->maintenance_request_id,
+                        'action' => 'open_details',
+                        'status' => 'completed',
+                        'service_job_id' => $job->id,
+                        'technician_id' => $user->id,
+                    ]
+                );
+            }
         }
+
+        return $job;
     }
 
     public function addMaintenanceRecord(User $user, int $jobId, array $data): MaintenanceRecord

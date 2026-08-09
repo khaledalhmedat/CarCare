@@ -19,6 +19,7 @@ use App\Repositories\Implementation\FuelOrderRepository;
 use App\Repositories\Implementation\MaintenanceRequestRepository;
 use App\Repositories\Implementation\VehicleRepository;
 use App\Services\MaintenanceRequestService;
+use App\Services\NotificationService;
 use App\Services\VehicleService;
 use App\Models\User;
 use App\Repositories\Contracts\CustomerShopRepositoryInterface;
@@ -57,7 +58,8 @@ class RepositoryServiceProvider extends ServiceProvider
         
         $this->app->singleton(MaintenanceRequestService::class, function ($app) {
             return new MaintenanceRequestService(
-                $app->make(MaintenanceRequestRepositoryInterface::class)
+                $app->make(MaintenanceRequestRepositoryInterface::class),
+                $app->make(NotificationService::class),
             );
         });
 
