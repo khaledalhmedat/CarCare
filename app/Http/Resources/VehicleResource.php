@@ -19,10 +19,10 @@ class VehicleResource extends JsonResource
             'image' => $this->image ? asset('storage/' . $this->image) : null,
             'image_path' => $this->image,
 
-            'owner' => [
+            'owner' => $this->user ? [
                 'id' => $this->user->id,
                 'name' => $this->user->name,
-            ],
+            ] : null,
 
             'status' => $this->getMaintenanceStatus(),
             'needs_maintenance' => $this->needsMaintenance(),
