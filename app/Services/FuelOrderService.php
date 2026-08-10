@@ -17,7 +17,10 @@ use App\Helpers\HaversineTrait;
 
 class FuelOrderService
 {
-    public function __construct(protected FuelOrderRepositoryInterface $repository) {}
+    public function __construct(
+        protected FuelOrderRepositoryInterface $repository,
+        protected NotificationService $notifications
+    ) {}
 
     use HaversineTrait;
 
@@ -54,7 +57,31 @@ class FuelOrderService
         if (!$order->canCancel()) {
             throw new \Exception('لا يمكن إلغاء الطلب في هذه المرحلة');
         }
-        return $this->repository->cancel($order, $reason);
+
+        // نلتقط مزود الطلب المُسند قبل الإلغاء؛ العلاقة fuelProvider.user محمّلة مسبقاً من الـ repository
+        $assignedProviderId = $order->fuel_provider_id;
+        $providerUser = $order->fuelProvider?->user;
+
+        $cancelled = $this->repository->cancel($order, $reason);
+
+        if ($cancelled && $assignedProviderId && $providerUser && $providerUser->id !== $user->id) {
+            $this->notifications->notifyUser(
+                $providerUser,
+                'fuel_order_cancelled_by_customer',
+                'تم إلغاء طلب الوقود',
+                'قام العميل بإلغاء طلب الوقود',
+                [
+                    'entity_type' => 'fuel_order',
+                    'entity_id' => $order->id,
+                    'action' => 'open_details',
+                    'status' => 'cancelled',
+                    'reason' => $reason,
+                    'fuel_provider_id' => $assignedProviderId,
+                ]
+            );
+        }
+
+        return $cancelled;
     }
 
     public function assignProvider(int $orderId, int $providerId, User $provider): FuelOrder

@@ -21,7 +21,10 @@ use App\Models\FuelOrderTrackingPoint;
 
 class FuelProviderOrderService
 {
-    public function __construct(protected FuelOrderRepositoryInterface $repository) {}
+    public function __construct(
+        protected FuelOrderRepositoryInterface $repository,
+        protected NotificationService $notifications
+    ) {}
 
     use HaversineTrait;
 
@@ -127,6 +130,8 @@ class FuelProviderOrderService
             return $order;
         });
 
+        $order = $order->fresh(['user', 'vehicle']);
+
         // broadcast after commit — a broadcast failure must not undo the accept
         try {
             broadcast(new FuelOrderAccepted($order, $fuelProvider));
@@ -134,7 +139,25 @@ class FuelProviderOrderService
             Log::warning('fuel.accept.broadcast_failed', ['order_id' => $orderId, 'error' => $e->getMessage()]);
         }
 
-        return $order->fresh(['user', 'vehicle']);
+        $customer = $order->user;
+        if ($customer && $customer->id !== $provider->id) {
+            $this->notifications->notifyUser(
+                $customer,
+                'fuel_order_accepted',
+                'تم قبول طلب الوقود',
+                'تم قبول طلب الوقود الخاص بك، والمزود في طريقه إليك',
+                [
+                    'entity_type' => 'fuel_order',
+                    'entity_id' => $order->id,
+                    'action' => 'open_details',
+                    'status' => 'accepted',
+                    'fuel_provider_id' => $fuelProvider->id,
+                    'estimated_arrival_minutes' => $order->estimated_arrival_minutes,
+                ]
+            );
+        }
+
+        return $order;
     }
 
 
@@ -168,12 +191,16 @@ class FuelProviderOrderService
             'longitude' => $data['longitude'],
         ]);
 
-        broadcast(new FuelProviderLocationUpdated(
-            $orderId,
-            $fuelProvider->id,
-            $data['latitude'],
-            $data['longitude']
-        ));
+        try {
+            broadcast(new FuelProviderLocationUpdated(
+                $orderId,
+                $fuelProvider->id,
+                $data['latitude'],
+                $data['longitude']
+            ));
+        } catch (\Throwable $e) {
+            Log::warning('fuel.location.broadcast_failed', ['order_id' => $orderId, 'error' => $e->getMessage()]);
+        }
     }
 
 
@@ -185,44 +212,87 @@ class FuelProviderOrderService
             throw new \Exception('لم تقم بإدخال معلومات مزود الوقود بعد');
         }
 
-        $order = $this->repository->find($orderId);
-
-        if (!$order || $order->fuel_provider_id !== $fuelProvider->id) {
-            throw new \Exception('الطلب غير موجود أو لا يخصك');
-        }
-
-        // only allow forward transitions; blocks re-completing (which would duplicate the FuelLog)
-        // and blocks updating a cancelled/completed order
         $allowedFrom = ['in_progress' => ['accepted'], 'completed' => ['accepted', 'in_progress']];
-        if (!isset($allowedFrom[$status]) || !in_array($order->status, $allowedFrom[$status], true)) {
-            throw new \Exception('لا يمكن تحديث حالة الطلب في وضعه الحالي');
+
+        $order = DB::transaction(function () use ($fuelProvider, $orderId, $status, $allowedFrom) {
+            $order = FuelOrder::where('id', $orderId)
+                ->where('fuel_provider_id', $fuelProvider->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$order) {
+                throw new \Exception('الطلب غير موجود أو لا يخصك');
+            }
+
+            if (!isset($allowedFrom[$status]) || !in_array($order->status, $allowedFrom[$status], true)) {
+                throw new \Exception('لا يمكن تحديث حالة الطلب في وضعه الحالي');
+            }
+
+            $data = ['status' => $status];
+
+            if ($status === 'in_progress') {
+                $data['started_at'] = now();
+            }
+
+            if ($status === 'completed') {
+                $data['completed_at'] = now();
+
+                \App\Models\FuelLog::create([
+                    'vehicle_id' => $order->vehicle_id,
+                    'fuel_order_id' => $order->id,
+                    'amount' => $order->amount,
+                    'fuel_type' => $order->fuel_type,
+                    'fuel_provider_id' => $fuelProvider->id,
+                    'cost' => $order->total_price,
+                    'km_at_fill' => 0,
+                ]);
+            }
+
+            $order->update($data);
+
+            return $order->fresh();
+        });
+
+        try {
+            broadcast(new FuelOrderStatusUpdated($order));
+        } catch (\Throwable $e) {
+            Log::warning('fuel.status.broadcast_failed', ['order_id' => $orderId, 'error' => $e->getMessage()]);
         }
 
-        $data = ['status' => $status];
-
-        if ($status === 'in_progress') {
-            $data['started_at'] = now();
+        $customer = $order->user;
+        if ($customer && $customer->id !== $provider->id) {
+            if ($status === 'in_progress') {
+                $this->notifications->notifyUser(
+                    $customer,
+                    'fuel_order_in_progress',
+                    'جاري توصيل الوقود',
+                    'المزود في طريقه لتوصيل طلب الوقود الخاص بك',
+                    [
+                        'entity_type' => 'fuel_order',
+                        'entity_id' => $order->id,
+                        'action' => 'open_details',
+                        'status' => 'in_progress',
+                        'fuel_provider_id' => $fuelProvider->id,
+                    ]
+                );
+            } elseif ($status === 'completed') {
+                $this->notifications->notifyUser(
+                    $customer,
+                    'fuel_order_completed',
+                    'تم توصيل الوقود',
+                    'تم توصيل طلب الوقود بنجاح',
+                    [
+                        'entity_type' => 'fuel_order',
+                        'entity_id' => $order->id,
+                        'action' => 'open_details',
+                        'status' => 'completed',
+                        'fuel_provider_id' => $fuelProvider->id,
+                    ]
+                );
+            }
         }
 
-        if ($status === 'completed') {
-            $data['completed_at'] = now();
-
-            \App\Models\FuelLog::create([
-                'vehicle_id' => $order->vehicle_id,
-                'fuel_order_id' => $order->id,
-                'amount' => $order->amount,
-                'fuel_type' => $order->fuel_type,
-                'fuel_provider_id' => $fuelProvider->id,
-                'cost' => $order->total_price,
-                'km_at_fill' => 0,
-            ]);
-        }
-
-        $order->update($data);
-
-        broadcast(new FuelOrderStatusUpdated($order));
-
-        return $order->fresh();
+        return $order;
     }
 
 
@@ -251,11 +321,34 @@ class FuelProviderOrderService
             'cancellation_reason' => $reason,
         ]);
 
-        broadcast(new FuelOrderCancelled($order, $fuelProvider, $reason));
+        try {
+            broadcast(new FuelOrderCancelled($order, $fuelProvider, $reason));
+            broadcast(new NewEmergencyFuelOrder($order, null, null));
+        } catch (\Throwable $e) {
+            Log::warning('fuel.provider_cancel.broadcast_failed', ['order_id' => $orderId, 'error' => $e->getMessage()]);
+        }
 
-        broadcast(new NewEmergencyFuelOrder($order, null, null));
+        $order = $order->fresh();
 
-        return $order->fresh();
+        $customer = $order->user;
+        if ($customer && $customer->id !== $provider->id) {
+            $this->notifications->notifyUser(
+                $customer,
+                'fuel_order_reopened_after_provider_cancel',
+                'تمت إعادة فتح طلب الوقود',
+                'ألغى المزود الطلب، وتمت إعادته للبحث عن مزود آخر',
+                [
+                    'entity_type' => 'fuel_order',
+                    'entity_id' => $order->id,
+                    'action' => 'open_details',
+                    'status' => 'pending',
+                    'fuel_provider_id' => $fuelProvider->id,
+                    'reason' => $reason,
+                ]
+            );
+        }
+
+        return $order;
     }
 
 
