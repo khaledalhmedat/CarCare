@@ -1,19 +1,29 @@
 <?php
 
+// للتذكير: هذا الملف يستبدل اختبار Laravel الافتراضي لـ GET / (غير موجود في هذا المشروع API-only) باختبار حقيقي لـ /api/health.
+
 namespace Tests\Feature;
 
-// use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class ExampleTest extends TestCase
 {
-    /**
-     * A basic test example.
-     */
     public function test_the_application_returns_a_successful_response(): void
     {
-        $response = $this->get('/');
+        $response = $this->getJson('/api/health');
 
-        $response->assertStatus(200);
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'status' => 'ok',
+            ])
+            ->assertJsonStructure([
+                'success',
+                'status',
+                'app',
+                'database',
+                'instance',
+                'server_time',
+            ]);
     }
 }
