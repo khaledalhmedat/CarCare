@@ -7,13 +7,22 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Cart;
 use App\Models\Product;
+use App\Models\Shop;
 use App\Repositories\Contracts\CustomerShopRepositoryInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class CustomerShopService
 {
-    public function __construct(protected CustomerShopRepositoryInterface $repository) {}
+    public function __construct(
+        protected CustomerShopRepositoryInterface $repository,
+        protected NotificationService $notifications
+    ) {}
+
+    private function resolveShopOwnerUser(?int $shopId): ?User
+    {
+        return $shopId ? Shop::find($shopId)?->user : null;
+    }
 
     public function getShops(array $filters)
     {
@@ -181,12 +190,33 @@ class CustomerShopService
             $this->repository->clearCart($user);
 
             DB::commit();
-            return $order->load(['shop', 'items.product']);
 
         } catch (\Exception $e) {
             DB::rollBack();
             throw $e;
         }
+
+        $order = $order->load(['shop', 'items.product']);
+
+        $shopOwner = $this->resolveShopOwnerUser($shopId);
+        if ($shopOwner && $shopOwner->id !== $user->id) {
+            $this->notifications->notifyUser(
+                $shopOwner,
+                'spare_parts_order_received',
+                'طلب قطع غيار جديد',
+                'تم إنشاء طلب جديد في متجرك ويحتاج إلى المراجعة',
+                [
+                    'entity_type' => 'spare_parts_order',
+                    'entity_id' => $order->id,
+                    'action' => 'open_details',
+                    'status' => 'pending',
+                    'shop_id' => $shopId,
+                    'total_price' => $order->total_price,
+                ]
+            );
+        }
+
+        return $order;
     }
 
     public function getUserOrders(User $user, ?string $status = null)
@@ -205,7 +235,7 @@ class CustomerShopService
 
     public function cancelOrder(int $id, User $user, string $reason): bool
     {
-        return DB::transaction(function () use ($id, $user, $reason) {
+        $result = DB::transaction(function () use ($id, $user, $reason) {
             $order = Order::where('id', $id)
                 ->where('user_id', $user->id)
                 ->lockForUpdate()
@@ -245,8 +275,36 @@ class CustomerShopService
                 }
             }
 
-            return $this->repository->cancelOrder($order, $reason);
+            $cancelled = $this->repository->cancelOrder($order, $reason);
+
+            return [
+                'cancelled' => $cancelled,
+                'order_id' => $order->id,
+                'shop_id' => $order->shop_id,
+            ];
         });
+
+        if ($result['cancelled']) {
+            $shopOwner = $this->resolveShopOwnerUser($result['shop_id']);
+            if ($shopOwner && $shopOwner->id !== $user->id) {
+                $this->notifications->notifyUser(
+                    $shopOwner,
+                    'spare_parts_order_cancelled_by_customer',
+                    'تم إلغاء طلب قطع الغيار',
+                    'قام العميل بإلغاء طلب قطع الغيار',
+                    [
+                        'entity_type' => 'spare_parts_order',
+                        'entity_id' => $result['order_id'],
+                        'action' => 'open_details',
+                        'status' => 'cancelled',
+                        'shop_id' => $result['shop_id'],
+                        'reason' => $reason,
+                    ]
+                );
+            }
+        }
+
+        return $result['cancelled'];
     }
 
     

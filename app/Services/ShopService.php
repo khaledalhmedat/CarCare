@@ -14,7 +14,10 @@ use Illuminate\Support\Facades\Storage;
 
 class ShopService
 {
-    public function __construct(protected ShopRepositoryInterface $repository) {}
+    public function __construct(
+        protected ShopRepositoryInterface $repository,
+        protected NotificationService $notifications
+    ) {}
 
     public function getProfile(User $user): ?Shop
     {
@@ -190,7 +193,7 @@ public function acceptOrder(User $user, int $orderId): Order
         throw new \Exception('متجرك لم يتم اعتماده بعد من الإدارة');
     }
 
-    return DB::transaction(function () use ($shop, $orderId) {
+    $order = DB::transaction(function () use ($shop, $orderId) {
         $order = Order::where('id', $orderId)
             ->where('shop_id', $shop->id)
             ->lockForUpdate()
@@ -208,6 +211,25 @@ public function acceptOrder(User $user, int $orderId): Order
 
         return $order->fresh();
     });
+
+    $customer = $order->user;
+    if ($customer && $customer->id !== $user->id) {
+        $this->notifications->notifyUser(
+            $customer,
+            'spare_parts_order_accepted',
+            'تم قبول طلب قطع الغيار',
+            'وافق المتجر على طلب قطع الغيار الخاص بك',
+            [
+                'entity_type' => 'spare_parts_order',
+                'entity_id' => $order->id,
+                'action' => 'open_details',
+                'status' => 'accepted',
+                'shop_id' => $shop->id,
+            ]
+        );
+    }
+
+    return $order;
 }
 
 public function rejectOrder(User $user, int $orderId, string $reason): Order
@@ -217,7 +239,7 @@ public function rejectOrder(User $user, int $orderId, string $reason): Order
         throw new \Exception('لم تقم بإدخال معلومات متجرك بعد');
     }
 
-    return DB::transaction(function () use ($shop, $orderId, $reason) {
+    $order = DB::transaction(function () use ($shop, $orderId, $reason) {
         $order = Order::where('id', $orderId)
             ->where('shop_id', $shop->id)
             ->lockForUpdate()
@@ -261,6 +283,26 @@ public function rejectOrder(User $user, int $orderId, string $reason): Order
 
         return $order->fresh();
     });
+
+    $customer = $order->user;
+    if ($customer && $customer->id !== $user->id) {
+        $this->notifications->notifyUser(
+            $customer,
+            'spare_parts_order_rejected',
+            'تم رفض طلب قطع الغيار',
+            'رفض المتجر طلب قطع الغيار الخاص بك',
+            [
+                'entity_type' => 'spare_parts_order',
+                'entity_id' => $order->id,
+                'action' => 'open_details',
+                'status' => 'cancelled',
+                'shop_id' => $shop->id,
+                'reason' => $order->cancellation_reason,
+            ]
+        );
+    }
+
+    return $order;
 }
 
 
@@ -289,7 +331,7 @@ public function updateOrderStatus(User $user, int $orderId, string $status, ?str
         'delivered' => 'لا يمكن تأكيد التوصيل قبل بدء التوصيل',
     ];
 
-    return DB::transaction(function () use ($shop, $orderId, $status, $allowedFrom, $errorMessages) {
+    $order = DB::transaction(function () use ($shop, $orderId, $status, $allowedFrom, $errorMessages) {
         $order = Order::where('id', $orderId)
             ->where('shop_id', $shop->id)
             ->lockForUpdate()
@@ -307,6 +349,32 @@ public function updateOrderStatus(User $user, int $orderId, string $status, ?str
 
         return $order->fresh();
     });
+
+    $customer = $order->user;
+    if ($customer && $customer->id !== $user->id) {
+        $notificationsByStatus = [
+            'processing' => ['spare_parts_order_processing', 'جاري تجهيز طلبك', 'بدأ المتجر بتجهيز طلب قطع الغيار الخاص بك'],
+            'out_for_delivery' => ['spare_parts_order_out_for_delivery', 'طلبك في طريقه إليك', 'تم تجهيز طلب قطع الغيار وخرج للتوصيل'],
+            'delivered' => ['spare_parts_order_delivered', 'تم تسليم طلبك', 'تم تسليم طلب قطع الغيار بنجاح'],
+        ];
+        [$type, $title, $body] = $notificationsByStatus[$status];
+
+        $this->notifications->notifyUser(
+            $customer,
+            $type,
+            $title,
+            $body,
+            [
+                'entity_type' => 'spare_parts_order',
+                'entity_id' => $order->id,
+                'action' => 'open_details',
+                'status' => $status,
+                'shop_id' => $shop->id,
+            ]
+        );
+    }
+
+    return $order;
 }
 
 
