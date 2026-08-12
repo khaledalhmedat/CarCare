@@ -8,6 +8,8 @@ use App\Models\CarWashRating;
 use App\Models\CarWasher;
 use App\Repositories\Contracts\CarwashRepositoryInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class CarwashService
 {
@@ -78,22 +80,40 @@ class CarwashService
             $carWasher = CarWasher::find($data['car_washer_id']);
 
             if (!$carWasher) {
-                throw new \Exception('المغسلة غير موجودة');
+                throw new NotFoundHttpException('المغسلة غير موجودة');
+            }
+
+            if ($carWasher->status !== 'approved') {
+                throw ValidationException::withMessages([
+                    'car_washer_id' => ['المغسلة غير متاحة للحجز حالياً'],
+                ]);
+            }
+
+            if ($carWasher->user_id === $user->id) {
+                throw ValidationException::withMessages([
+                    'car_washer_id' => ['لا يمكنك حجز موعد في مغسلتك الخاصة'],
+                ]);
             }
 
             if (!$carWasher->is_available) {
-                throw new \Exception('المغسلة غير متاحة حالياً');
+                throw ValidationException::withMessages([
+                    'car_washer_id' => ['المغسلة غير متاحة حالياً'],
+                ]);
             }
 
             $vehicle = $user->vehicles()->find($data['vehicle_id']);
             if (!$vehicle) {
-                throw new \Exception('المركبة غير موجودة أو لا تخصك');
+                throw ValidationException::withMessages([
+                    'vehicle_id' => ['المركبة غير موجودة أو لا تخصك'],
+                ]);
             }
 
             // السعر يُحسب من أسعار المغسلة نفسها ولا يُؤخذ من الطلب أبداً
             $servicePrices = $carWasher->service_prices ?? [];
             if (!array_key_exists($data['service_type'], $servicePrices)) {
-                throw new \Exception('نوع الخدمة غير متوفر لدى هذه المغسلة');
+                throw ValidationException::withMessages([
+                    'service_type' => ['نوع الخدمة غير متوفر لدى هذه المغسلة'],
+                ]);
             }
 
             $data['price'] = $servicePrices[$data['service_type']];
@@ -145,7 +165,9 @@ class CarwashService
             }
 
             if (!in_array($booking->status, ['pending', 'accepted'])) {
-                throw new \Exception('لا يمكن إلغاء الحجز في هذه المرحلة');
+                throw ValidationException::withMessages([
+                    'status' => ['لا يمكن إلغاء الحجز في هذه المرحلة'],
+                ]);
             }
 
             // نلتقط مغسلة الحجز قبل الإلغاء؛ الحجز مُسند لمغسلة منذ الإنشاء (car_washer_id مطلوب حينها)
@@ -203,11 +225,13 @@ class CarwashService
                 ->first();
 
             if (!$booking) {
-                throw new \Exception('الطلب غير موجود');
+                throw new NotFoundHttpException('الطلب غير موجود');
             }
 
             if ($booking->status !== 'pending') {
-                throw new \Exception('هذا الطلب غير متاح للقبول');
+                throw ValidationException::withMessages([
+                    'status' => ['هذا الطلب غير متاح للقبول'],
+                ]);
             }
 
             $this->repository->accept($booking);
@@ -251,11 +275,13 @@ class CarwashService
                 ->first();
 
             if (!$booking) {
-                throw new \Exception('الطلب غير موجود');
+                throw new NotFoundHttpException('الطلب غير موجود');
             }
 
             if ($booking->status !== 'pending') {
-                throw new \Exception('لا يمكن رفض هذا الطلب حالياً');
+                throw ValidationException::withMessages([
+                    'status' => ['لا يمكن رفض هذا الطلب حالياً'],
+                ]);
             }
 
             $this->repository->reject($booking, $reason);
@@ -310,7 +336,7 @@ class CarwashService
         }
 
         // only allow forward transitions; blocks completing a cancelled/completed/pending booking
-        $allowedFrom = ['in_progress' => ['accepted'], 'completed' => ['accepted', 'in_progress']];
+        $allowedFrom = ['in_progress' => ['accepted'], 'completed' => ['in_progress']];
 
         $booking = DB::transaction(function () use ($carWasher, $bookingId, $status, $allowedFrom) {
             $booking = CarwashBooking::where('id', $bookingId)
@@ -319,11 +345,13 @@ class CarwashService
                 ->first();
 
             if (!$booking) {
-                throw new \Exception('الطلب غير موجود');
+                throw new NotFoundHttpException('الطلب غير موجود');
             }
 
             if (!in_array($booking->status, $allowedFrom[$status], true)) {
-                throw new \Exception('لا يمكن تحديث حالة الحجز في وضعه الحالي');
+                throw ValidationException::withMessages([
+                    'status' => ['لا يمكن تحديث حالة الحجز في وضعه الحالي'],
+                ]);
             }
 
             $this->repository->updateStatus($booking, $status);

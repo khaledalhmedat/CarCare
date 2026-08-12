@@ -54,7 +54,7 @@ class CarwashBookingStatusTest extends TestCase
         ]);
     }
 
-    public function test_accepted_to_completed_remains_supported(): void
+    public function test_accepted_to_completed_directly_is_rejected(): void
     {
         $washer = $this->makeApprovedWasher();
         [$customer, $vehicle] = $this->makeCustomerWithVehicle();
@@ -62,12 +62,91 @@ class CarwashBookingStatusTest extends TestCase
         Sanctum::actingAs($washer);
 
         $this->patchJson("/api/car_washer/bookings/{$booking->id}/status", ['status' => 'completed'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['status']);
+
+        $this->assertEquals('accepted', $booking->fresh()->status);
+        $this->assertEquals(0, $customer->notifications()->count());
+    }
+
+    public function test_accepted_to_in_progress_to_completed_succeeds(): void
+    {
+        $washer = $this->makeApprovedWasher();
+        [$customer, $vehicle] = $this->makeCustomerWithVehicle();
+        $booking = $this->makeBooking($customer, $vehicle, $washer, 'accepted');
+        Sanctum::actingAs($washer);
+
+        $this->patchJson("/api/car_washer/bookings/{$booking->id}/status", ['status' => 'in_progress'])
+            ->assertOk();
+        $this->assertEquals('in_progress', $booking->fresh()->status);
+
+        $this->patchJson("/api/car_washer/bookings/{$booking->id}/status", ['status' => 'completed'])
             ->assertOk()
             ->assertJson(['success' => true]);
 
         $this->assertEquals('completed', $booking->fresh()->status);
-        $this->assertEquals(1, $customer->notifications()->count());
-        $this->assertEquals('carwash_booking_completed', $customer->notifications()->first()->type);
+        $this->assertEquals(2, $customer->notifications()->count());
+    }
+
+    public function test_completed_to_completed_is_rejected(): void
+    {
+        $washer = $this->makeApprovedWasher();
+        [$customer, $vehicle] = $this->makeCustomerWithVehicle();
+        $booking = $this->makeBooking($customer, $vehicle, $washer, 'completed');
+        Sanctum::actingAs($washer);
+
+        $this->patchJson("/api/car_washer/bookings/{$booking->id}/status", ['status' => 'completed'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['status']);
+
+        $this->assertEquals('completed', $booking->fresh()->status);
+        $this->assertEquals(0, $customer->notifications()->count());
+    }
+
+    public function test_cancelled_to_in_progress_is_rejected(): void
+    {
+        $washer = $this->makeApprovedWasher();
+        [$customer, $vehicle] = $this->makeCustomerWithVehicle();
+        $booking = $this->makeBooking($customer, $vehicle, $washer, 'cancelled');
+        Sanctum::actingAs($washer);
+
+        $this->patchJson("/api/car_washer/bookings/{$booking->id}/status", ['status' => 'in_progress'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['status']);
+
+        $this->assertEquals('cancelled', $booking->fresh()->status);
+        $this->assertEquals(0, $customer->notifications()->count());
+    }
+
+    public function test_cancelled_to_completed_is_rejected(): void
+    {
+        $washer = $this->makeApprovedWasher();
+        [$customer, $vehicle] = $this->makeCustomerWithVehicle();
+        $booking = $this->makeBooking($customer, $vehicle, $washer, 'cancelled');
+        Sanctum::actingAs($washer);
+
+        $this->patchJson("/api/car_washer/bookings/{$booking->id}/status", ['status' => 'completed'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['status']);
+
+        $this->assertEquals('cancelled', $booking->fresh()->status);
+        $this->assertEquals(0, $customer->notifications()->count());
+    }
+
+    public function test_unauthorized_washer_cannot_update_status_of_others_booking(): void
+    {
+        $owner = $this->makeApprovedWasher();
+        [$customer, $vehicle] = $this->makeCustomerWithVehicle();
+        $booking = $this->makeBooking($customer, $vehicle, $owner, 'accepted');
+        $other = $this->makeApprovedWasher();
+        Sanctum::actingAs($other);
+
+        $this->patchJson("/api/car_washer/bookings/{$booking->id}/status", ['status' => 'in_progress'])
+            ->assertStatus(404)
+            ->assertJson(['success' => false]);
+
+        $this->assertEquals('accepted', $booking->fresh()->status);
+        $this->assertEquals(0, $customer->notifications()->count());
     }
 
     public function test_accept_then_reject_fails_and_adds_no_notification(): void
@@ -81,8 +160,8 @@ class CarwashBookingStatusTest extends TestCase
         $this->assertEquals(1, $customer->notifications()->count());
 
         $this->postJson("/api/car_washer/bookings/{$booking->id}/reject")
-            ->assertStatus(500)
-            ->assertJson(['success' => false]);
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['status']);
 
         $this->assertEquals('accepted', $booking->fresh()->status);
         $this->assertEquals(1, $customer->notifications()->count());
@@ -99,8 +178,8 @@ class CarwashBookingStatusTest extends TestCase
         $this->assertEquals(1, $customer->notifications()->count());
 
         $this->postJson("/api/car_washer/bookings/{$booking->id}/accept")
-            ->assertStatus(500)
-            ->assertJson(['success' => false]);
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['status']);
 
         $this->assertEquals('cancelled', $booking->fresh()->status);
         $this->assertEquals(1, $customer->notifications()->count());
@@ -120,8 +199,8 @@ class CarwashBookingStatusTest extends TestCase
 
         Sanctum::actingAs($washer);
         $this->postJson("/api/car_washer/bookings/{$booking->id}/accept")
-            ->assertStatus(500)
-            ->assertJson(['success' => false]);
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['status']);
 
         $this->assertEquals('cancelled', $booking->fresh()->status);
         $this->assertEquals(0, $customer->notifications()->count());
@@ -140,8 +219,8 @@ class CarwashBookingStatusTest extends TestCase
 
         Sanctum::actingAs($washer);
         $this->postJson("/api/car_washer/bookings/{$booking->id}/reject")
-            ->assertStatus(500)
-            ->assertJson(['success' => false]);
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['status']);
 
         $this->assertEquals('cancelled', $booking->fresh()->status);
     }
@@ -155,7 +234,7 @@ class CarwashBookingStatusTest extends TestCase
 
         $this->postJson("/api/customer/carwash_bookings/{$booking->id}/cancel", [
             'cancellation_reason' => 'تغيّرت خططي',
-        ])->assertStatus(500)->assertJson(['success' => false]);
+        ])->assertStatus(422)->assertJsonValidationErrors(['status']);
 
         $this->assertEquals('in_progress', $booking->fresh()->status);
         $this->assertEquals(0, $washer->notifications()->count());
@@ -173,8 +252,8 @@ class CarwashBookingStatusTest extends TestCase
         $this->assertEquals(1, $customer->notifications()->count());
 
         $this->patchJson("/api/car_washer/bookings/{$booking->id}/status", ['status' => 'in_progress'])
-            ->assertStatus(500)
-            ->assertJson(['success' => false]);
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['status']);
 
         $this->assertEquals(1, $customer->notifications()->count());
     }
@@ -191,8 +270,8 @@ class CarwashBookingStatusTest extends TestCase
         $this->assertEquals(1, $customer->notifications()->count());
 
         $this->patchJson("/api/car_washer/bookings/{$booking->id}/status", ['status' => 'completed'])
-            ->assertStatus(500)
-            ->assertJson(['success' => false]);
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['status']);
 
         $this->assertEquals('completed', $booking->fresh()->status);
         $this->assertEquals(1, $customer->notifications()->count());
@@ -206,8 +285,8 @@ class CarwashBookingStatusTest extends TestCase
         Sanctum::actingAs($washer);
 
         $this->patchJson("/api/car_washer/bookings/{$booking->id}/status", ['status' => 'in_progress'])
-            ->assertStatus(500)
-            ->assertJson(['success' => false]);
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['status']);
 
         $this->assertEquals('completed', $booking->fresh()->status);
         $this->assertEquals(0, $customer->notifications()->count());
@@ -222,7 +301,7 @@ class CarwashBookingStatusTest extends TestCase
         Sanctum::actingAs($other);
 
         $this->postJson("/api/car_washer/bookings/{$booking->id}/accept")
-            ->assertStatus(500)
+            ->assertStatus(404)
             ->assertJson(['success' => false]);
 
         $this->assertEquals('pending', $booking->fresh()->status);
