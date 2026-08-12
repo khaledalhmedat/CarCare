@@ -13,10 +13,10 @@ class CarWashRatingResource extends JsonResource
             'rating' => $this->rating,
             'rating_stars' => str_repeat('⭐', $this->rating),
             'review' => $this->review,
-            'user' => [
+            'user' => $this->user ? [
                 'id' => $this->user->id,
                 'name' => $this->user->name,
-            ],
+            ] : null,
             'created_at' => $this->created_at->toDateTimeString(),
             'created_ago' => $this->created_at->diffForHumans(),
         ];
