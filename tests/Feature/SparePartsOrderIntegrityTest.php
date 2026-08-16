@@ -199,6 +199,35 @@ class SparePartsOrderIntegrityTest extends TestCase
         ]);
     }
 
+    public function test_new_order_succeeds_after_cancelling_previous_one(): void
+    {
+        $owner = $this->makeApprovedShop();
+        $product = $this->makeProduct($owner, 70, 100);
+        $customer = $this->makeUser();
+        $this->addToCart($customer, $product, 7);
+        Sanctum::actingAs($customer);
+
+        $this->postJson('/api/customer/orders', $this->checkoutPayload())->assertCreated();
+        $this->assertEquals(63, $product->fresh()->stock_quantity);
+
+        $firstOrder = Order::first();
+        $this->postJson("/api/customer/orders/{$firstOrder->id}/cancel", ['cancellation_reason' => 'تغيّرت خططي'])
+            ->assertOk();
+        $this->assertEquals(70, $product->fresh()->stock_quantity);
+
+        $this->addToCart($customer, $product, 7);
+
+        $this->postJson('/api/customer/orders', $this->checkoutPayload())
+            ->assertCreated()
+            ->assertJson(['success' => true]);
+
+        $this->assertEquals(2, Order::count());
+        $this->assertEquals('cancelled', $firstOrder->fresh()->status);
+        $this->assertEquals('pending', Order::latest('id')->first()->status);
+        $this->assertEquals(63, $product->fresh()->stock_quantity);
+        $this->assertEquals(0, Cart::where('user_id', $customer->id)->count());
+    }
+
     public function test_shop_owner_soft_deleted_produces_null_owner_without_500(): void
     {
         // createOrder لا يتحقق من حالة المتجر أو وجود مالكه إطلاقاً (لا شرط مستقل يمنع هذا المسار)،
