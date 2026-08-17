@@ -1,7 +1,5 @@
 <?php
 
-// للتذكير: هذا الملف مسؤول عن منطق إعادة تعيين كلمة المرور عبر رمز OTP.
-
 namespace App\Services\Auth;
 
 use App\Models\PasswordResetOtp;
@@ -22,9 +20,12 @@ class PasswordResetService
 
     public function requestOtp(string $email): void
     {
+        Log::info('Password reset request initiated', ['email' => $email]);
+
         $user = $this->userRepository->findByEmail($email);
 
         if (!$user) {
+            Log::warning('Password reset aborted: User not found', ['email' => $email]);
             return;
         }
 
@@ -41,8 +42,11 @@ class PasswordResetService
             'attempts_count' => 0,
         ]);
 
+        Log::info('Attempting to dispatch OTP notification', ['email' => $email, 'otp' => $otp]);
+
         try {
             $user->notify(new PasswordResetOtpNotification($otp, self::OTP_TTL_MINUTES));
+            Log::info('OTP notification dispatched successfully', ['email' => $email]);
         } catch (\Throwable $e) {
             Log::warning('Password reset OTP email failed to send', [
                 'email' => $email,
@@ -96,10 +100,10 @@ class PasswordResetService
             ->first();
 
         if (
-            !$record
-            || $record->isResetTokenExpired()
-            || !$record->reset_token_hash
-            || !Hash::check($resetToken, $record->reset_token_hash)
+            !$record ||
+            $record->isResetTokenExpired() ||
+            !$record->reset_token_hash ||
+            !Hash::check($resetToken, $record->reset_token_hash)
         ) {
             $this->fail('reset_token', 'رمز إعادة التعيين غير صالح أو منتهي الصلاحية');
         }
@@ -116,7 +120,6 @@ class PasswordResetService
 
         $user->tokens()->delete();
     }
-
     protected function fail(string $field, string $message): never
     {
         throw ValidationException::withMessages([$field => [$message]]);
