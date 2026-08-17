@@ -12,7 +12,7 @@ use Illuminate\Validation\ValidationException;
 
 class PasswordResetService
 {
-    public const OTP_TTL_MINUTES = 10;
+    public const OTP_TTL_MINUTES = 5;
     public const RESET_TOKEN_TTL_MINUTES = 15;
     public const MAX_ATTEMPTS = 5;
 
