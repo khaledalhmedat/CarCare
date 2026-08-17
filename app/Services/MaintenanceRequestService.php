@@ -15,8 +15,106 @@ use Illuminate\Support\Facades\Storage;
 class MaintenanceRequestService
 {
     public function __construct(
-        protected MaintenanceRequestRepositoryInterface $requestRepository
+        protected MaintenanceRequestRepositoryInterface $requestRepository,
+        protected NotificationService $notifications
     ) {}
+
+    private function notifyQuotationAccepted(MaintenanceRequest $request, Quotation $quotation, User $actor, ?int $serviceJobId, ?string $scheduledDate): void
+    {
+        $technicianUser = $quotation->technician;
+
+        if (!$technicianUser || $technicianUser->id === $actor->id) {
+            return;
+        }
+
+        $this->notifications->notifyUser(
+            $technicianUser,
+            'maintenance_quotation_accepted',
+            'تم قبول عرض السعر',
+            'تم قبول عرض السعر الخاص بك',
+            [
+                'entity_type' => 'maintenance_request',
+                'entity_id' => $request->id,
+                'action' => 'open_details',
+                'status' => 'quotation_accepted',
+                'quotation_id' => $quotation->id,
+                'service_job_id' => $serviceJobId,
+                'scheduled_date' => $scheduledDate,
+            ]
+        );
+    }
+
+    private function lockRequestAndQuotations(int $requestId, int $quotationId, User $user): array
+    {
+        $lockedRequest = MaintenanceRequest::where('id', $requestId)
+            ->where('user_id', $user->id)
+            ->lockForUpdate()
+            ->first();
+
+        if (!$lockedRequest) {
+            throw new \Exception('الطلب غير موجود أو لا تملك صلاحية الوصول إليه');
+        }
+
+        if ($lockedRequest->status !== 'quoted') {
+            throw new \Exception('لا يمكن قبول العروض الآن');
+        }
+
+        $lockedQuotations = Quotation::where('maintenance_request_id', $lockedRequest->id)
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        $lockedQuotation = $lockedQuotations->firstWhere('id', $quotationId);
+
+        if (!$lockedQuotation) {
+            throw new \Exception('العرض غير موجود');
+        }
+
+        if ($lockedQuotation->status !== 'pending') {
+            throw new \Exception('هذا العرض غير متاح للقبول');
+        }
+
+        return [$lockedRequest, $lockedQuotation, $lockedQuotations];
+    }
+
+    private function notifyLosingQuotations(MaintenanceRequest $request, $losingQuotations, ?int $acceptedTechnicianId, User $actor): void
+    {
+        $notifiedTechnicianIds = [];
+
+        foreach ($losingQuotations as $losing) {
+            $technicianId = $losing->technician_id;
+
+            if (!$technicianId || $technicianId === $acceptedTechnicianId || $technicianId === $actor->id) {
+                continue;
+            }
+
+            if (in_array($technicianId, $notifiedTechnicianIds, true)) {
+                continue;
+            }
+
+            $technicianUser = User::find($technicianId);
+            if (!$technicianUser) {
+                continue;
+            }
+
+            $notifiedTechnicianIds[] = $technicianId;
+
+            $this->notifications->notifyUser(
+                $technicianUser,
+                'maintenance_quotation_rejected',
+                'تم رفض عرض السعر',
+                'تم اختيار عرض سعر آخر لطلب الصيانة',
+                [
+                    'entity_type' => 'maintenance_request',
+                    'entity_id' => $request->id,
+                    'action' => 'open_details',
+                    'status' => 'rejected',
+                    'quotation_id' => $losing->id,
+                    'rejection_source' => 'another_quotation_accepted',
+                ]
+            );
+        }
+    }
 
 
     public function getUserRequests(User $user, ?string $status = null)
@@ -141,27 +239,36 @@ class MaintenanceRequestService
 
     public function acceptQuotation(int $requestId, int $quotationId, User $user): bool
     {
-        $request = $this->getRequest($requestId, $user);
+        $this->getRequest($requestId, $user);
 
-        if ($request->status !== 'quoted') {
-            throw new \Exception('لا يمكن قبول العروض الآن');
-        }
+        $result = DB::transaction(function () use ($requestId, $quotationId, $user) {
+            [$lockedRequest, $lockedQuotation, $lockedQuotations] = $this->lockRequestAndQuotations($requestId, $quotationId, $user);
 
-        $quotation = $request->quotations()->find($quotationId);
+            $losingQuotations = $lockedQuotations
+                ->where('id', '!=', $lockedQuotation->id)
+                ->where('status', 'pending')
+                ->values();
 
-        if (!$quotation) {
-            throw new \Exception('العرض غير موجود');
-        }
-
-        DB::transaction(function () use ($request, $quotation) {
-            $request->quotations()
-                ->where('id', '!=', $quotation->id)
+            Quotation::where('maintenance_request_id', $lockedRequest->id)
+                ->where('id', '!=', $lockedQuotation->id)
                 ->update(['status' => 'rejected']);
 
-            $quotation->update(['status' => 'accepted']);
+            $lockedQuotation->update(['status' => 'accepted']);
 
-            $request->update(['status' => 'quotation_accepted']);
+            $lockedRequest->update(['status' => 'quotation_accepted']);
+
+            return [
+                'request' => $lockedRequest,
+                'quotation_id' => $lockedQuotation->id,
+                'losing_quotations' => $losingQuotations,
+            ];
         });
+
+        $request = $result['request'];
+        $quotation = Quotation::with('technician')->find($result['quotation_id']);
+
+        $this->notifyQuotationAccepted($request, $quotation, $user, null, null);
+        $this->notifyLosingQuotations($request, $result['losing_quotations'], $quotation->technician_id, $user);
 
         return true;
     }
@@ -211,6 +318,25 @@ class MaintenanceRequestService
                 ]);
             }
         });
+
+        $technicianUser = $quotation->technician;
+        if ($technicianUser && $technicianUser->id !== $user->id) {
+            $this->notifications->notifyUser(
+                $technicianUser,
+                'maintenance_quotation_rejected',
+                'تم رفض عرض السعر',
+                'تم رفض عرض السعر الذي قدمته',
+                [
+                    'entity_type' => 'maintenance_request',
+                    'entity_id' => $quotation->maintenance_request_id,
+                    'action' => 'open_details',
+                    'status' => 'rejected',
+                    'quotation_id' => $quotation->id,
+                    'rejection_source' => 'explicit',
+                    'reason' => $reason,
+                ]
+            );
+        }
 
         return true;
     }
@@ -277,51 +403,64 @@ class MaintenanceRequestService
 
     public function acceptQuotationWithSchedule(int $requestId, int $quotationId, User $user, array $data): array
     {
-        $request = $this->getRequest($requestId, $user);
+        // فحص سريع اختياري فقط لرسالة خطأ مبكرة؛ التحقق الموثوق يتم داخل القفل أدناه
+        $this->getRequest($requestId, $user);
 
-        if ($request->status !== 'quoted') {
-            throw new \Exception('لا يمكن قبول العروض الآن');
-        }
+        $result = DB::transaction(function () use ($requestId, $quotationId, $user, $data) {
+            [$lockedRequest, $lockedQuotation, $lockedQuotations] = $this->lockRequestAndQuotations($requestId, $quotationId, $user);
 
-        $quotation = $request->quotations()->find($quotationId);
+            $losingQuotations = $lockedQuotations
+                ->where('id', '!=', $lockedQuotation->id)
+                ->where('status', 'pending')
+                ->values();
 
-        if (!$quotation) {
-            throw new \Exception('العرض غير موجود');
-        }
-
-        if ($quotation->status !== 'pending') {
-            throw new \Exception('هذا العرض غير متاح للقبول');
-        }
-
-        return DB::transaction(function () use ($request, $quotation, $data) {
-            $request->quotations()
-                ->where('id', '!=', $quotation->id)
+            Quotation::where('maintenance_request_id', $lockedRequest->id)
+                ->where('id', '!=', $lockedQuotation->id)
                 ->update([
                     'status' => 'rejected',
                     'rejected_at' => now(),
                 ]);
 
-            $quotation->update([
+            $lockedQuotation->update([
                 'status' => 'accepted',
                 'accepted_at' => now(),
             ]);
 
-            $request->update(['status' => 'quotation_accepted']);
+            $lockedRequest->update(['status' => 'quotation_accepted']);
 
             $serviceJob = ServiceJob::create([
-                'maintenance_request_id' => $request->id,
-                'quotation_id' => $quotation->id,
-                'technician_id' => $quotation->technician_id,
+                'maintenance_request_id' => $lockedRequest->id,
+                'quotation_id' => $lockedQuotation->id,
+                'technician_id' => $lockedQuotation->technician_id,
                 'status' => 'assigned',
                 'scheduled_date' => $data['scheduled_date'] ?? now()->addDays(1),
                 'notes' => $data['notes'] ?? null,
             ]);
 
             return [
-                'quotation' => $quotation->fresh(['technician']),
+                'request' => $lockedRequest,
+                'quotation_id' => $lockedQuotation->id,
                 'service_job' => $serviceJob,
+                'losing_quotations' => $losingQuotations,
             ];
         });
+
+        $request = $result['request'];
+        $quotation = Quotation::with('technician')->find($result['quotation_id']);
+
+        $this->notifyQuotationAccepted(
+            $request,
+            $quotation,
+            $user,
+            $result['service_job']->id,
+            $result['service_job']->scheduled_date->toDateString()
+        );
+        $this->notifyLosingQuotations($request, $result['losing_quotations'], $quotation->technician_id, $user);
+
+        return [
+            'quotation' => $quotation,
+            'service_job' => $result['service_job'],
+        ];
     }
 
 

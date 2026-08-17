@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Models\Advertisement;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\URL;
 use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\CreatesTestData;
 use Tests\TestCase;
@@ -24,9 +25,41 @@ class AdvertisementTest extends TestCase
             'is_active' => true,
         ]);
 
-        $this->getJson('/api/advertisements/active')
+        $response = $this->getJson('/api/advertisements/active')
             ->assertOk()
             ->assertJson(['success' => true]);
+
+        $imageUrl = $response->json('data.0.image_url');
+        $this->assertStringContainsString('/storage/advertisements/a.png', $imageUrl);
+        $this->assertStringStartsWith('http://', $imageUrl);
+    }
+
+    public function test_active_ad_image_url_is_https_when_scheme_is_forced_like_production(): void
+    {
+        Advertisement::create([
+            'title' => 'Active Ad',
+            'image_path' => 'advertisements/b.png',
+            'placement' => 'home',
+            'is_active' => true,
+        ]);
+
+        // يحاكي ما يقوم به AppServiceProvider::boot() في بيئة الإنتاج فقط
+        URL::forceScheme('https');
+
+        $imageUrl = $this->getJson('/api/advertisements/active')
+            ->assertOk()
+            ->json('data.0.image_url');
+
+        $this->assertStringStartsWith('https://', $imageUrl);
+        $this->assertStringContainsString('/storage/advertisements/b.png', $imageUrl);
+    }
+
+    public function test_image_url_accessor_is_null_when_image_path_missing(): void
+    {
+        // image_path عمود إلزامي في قاعدة البيانات، لذا يُختبر السلوك الآمن على النموذج مباشرة دون حفظ صف فعلي
+        $ad = new Advertisement(['image_path' => null]);
+
+        $this->assertNull($ad->image_url);
     }
 
     public function test_admin_ads_index_requires_admin(): void

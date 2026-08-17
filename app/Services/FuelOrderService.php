@@ -17,7 +17,10 @@ use App\Helpers\HaversineTrait;
 
 class FuelOrderService
 {
-    public function __construct(protected FuelOrderRepositoryInterface $repository) {}
+    public function __construct(
+        protected FuelOrderRepositoryInterface $repository,
+        protected NotificationService $notifications
+    ) {}
 
     use HaversineTrait;
 
@@ -54,7 +57,31 @@ class FuelOrderService
         if (!$order->canCancel()) {
             throw new \Exception('لا يمكن إلغاء الطلب في هذه المرحلة');
         }
-        return $this->repository->cancel($order, $reason);
+
+        // نلتقط مزود الطلب المُسند قبل الإلغاء؛ العلاقة fuelProvider.user محمّلة مسبقاً من الـ repository
+        $assignedProviderId = $order->fuel_provider_id;
+        $providerUser = $order->fuelProvider?->user;
+
+        $cancelled = $this->repository->cancel($order, $reason);
+
+        if ($cancelled && $assignedProviderId && $providerUser && $providerUser->id !== $user->id) {
+            $this->notifications->notifyUser(
+                $providerUser,
+                'fuel_order_cancelled_by_customer',
+                'تم إلغاء طلب الوقود',
+                'قام العميل بإلغاء طلب الوقود',
+                [
+                    'entity_type' => 'fuel_order',
+                    'entity_id' => $order->id,
+                    'action' => 'open_details',
+                    'status' => 'cancelled',
+                    'reason' => $reason,
+                    'fuel_provider_id' => $assignedProviderId,
+                ]
+            );
+        }
+
+        return $cancelled;
     }
 
     public function assignProvider(int $orderId, int $providerId, User $provider): FuelOrder
@@ -80,20 +107,18 @@ class FuelOrderService
 
     public function createEmergencyOrder(User $user, array $data): FuelOrder
     {
-        try {
-            DB::beginTransaction();
+        $vehicle = $user->vehicles()->find($data['vehicle_id']);
+        if (!$vehicle) {
+            throw new \Exception('المركبة غير موجودة');
+        }
 
-            $vehicle = $user->vehicles()->find($data['vehicle_id']);
-            if (!$vehicle) {
-                throw new \Exception('المركبة غير موجودة');
-            }
+        $city = $data['city'] ?? $this->getCityFromCoordinates(
+            $data['delivery_latitude'],
+            $data['delivery_longitude']
+        );
 
-            $city = $data['city'] ?? $this->getCityFromCoordinates(
-                $data['delivery_latitude'],
-                $data['delivery_longitude']
-            );
-
-            $order = $this->repository->createForUser($user, [
+        $order = DB::transaction(function () use ($user, $data, $city) {
+            return $this->repository->createForUser($user, [
                 'vehicle_id' => $data['vehicle_id'],
                 'fuel_type' => $data['fuel_type'],
                 'amount' => $data['amount'],
@@ -104,7 +129,16 @@ class FuelOrderService
                 'notes' => $data['notes'] ?? null,
                 'status' => 'pending',
             ]);
+        });
 
+        $this->notifyProviders($order, $city, $data);
+
+        return $order->load(['vehicle']);
+    }
+
+    protected function notifyProviders(FuelOrder $order, ?string $city, array $data): void
+    {
+        try {
             $nearbyProviders = $this->getNearbyFuelProviders(
                 $data['delivery_latitude'],
                 $data['delivery_longitude'],
@@ -123,35 +157,36 @@ class FuelOrderService
                     'order_id' => $order->id,
                     'providers' => $providersNotified
                 ]);
-            } else {
-                $cityProviders = $this->getFuelProvidersByCity($city);
 
-                if ($cityProviders->isNotEmpty()) {
-                    foreach ($cityProviders as $provider) {
-                        broadcast(new NewEmergencyFuelOrder($order, $provider, null));
-                        $providersNotified[] = $provider->id;
-                    }
-
-                    Log::info('Fuel order: ' . $cityProviders->count() . ' city providers notified', [
-                        'order_id' => $order->id,
-                        'city' => $city,
-                        'providers' => $providersNotified
-                    ]);
-                } else {
-                    Log::warning('Fuel order: no providers found (neither nearby nor in same city)', [
-                        'order_id' => $order->id,
-                        'city' => $city,
-                        'lat' => $data['delivery_latitude'],
-                        'lng' => $data['delivery_longitude']
-                    ]);
-                }
+                return;
             }
 
-            DB::commit();
-            return $order->load(['vehicle']);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            throw $e;
+            $cityProviders = $this->getFuelProvidersByCity($city);
+
+            if ($cityProviders->isNotEmpty()) {
+                foreach ($cityProviders as $provider) {
+                    broadcast(new NewEmergencyFuelOrder($order, $provider, null));
+                    $providersNotified[] = $provider->id;
+                }
+
+                Log::info('Fuel order: ' . $cityProviders->count() . ' city providers notified', [
+                    'order_id' => $order->id,
+                    'city' => $city,
+                    'providers' => $providersNotified
+                ]);
+            } else {
+                Log::warning('Fuel order: no providers found (neither nearby nor in same city)', [
+                    'order_id' => $order->id,
+                    'city' => $city,
+                    'lat' => $data['delivery_latitude'],
+                    'lng' => $data['delivery_longitude']
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('fuel.emergency_order.broadcast_failed', [
+                'fuel_order_id' => $order->id ?? null,
+                'message' => $e->getMessage(),
+            ]);
         }
     }
 

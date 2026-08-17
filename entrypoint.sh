@@ -2,9 +2,15 @@
 
 echo "Setting up Laravel environment..."
 
-mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views storage/logs
+mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views storage/logs storage/app/public
 
 chmod -R 775 bootstrap/cache storage
+
+# Shared storage symlink - REQUIRED on EVERY container (app-1, app-2, ...).
+# The load balancer serves /storage files from any instance, so every
+# instance must have public/storage -> storage/app/public (shared volume).
+# Runs before the role check so all roles create it. --force is idempotent.
+php artisan storage:link --force || true
 
 if [ "$CONTAINER_ROLE" = "app" ] || [ -z "$CONTAINER_ROLE" ]; then
     if [ -z "$APP_KEY" ] || [ "$APP_KEY" = "SomeRandomString" ]; then
@@ -12,7 +18,6 @@ if [ "$CONTAINER_ROLE" = "app" ] || [ -z "$CONTAINER_ROLE" ]; then
         php artisan key:generate --force || true
     fi
     php artisan optimize:clear || true
-    php artisan storage:link --force || true
 
     echo "Checking database connection..."
     MAX_RETRIES=5

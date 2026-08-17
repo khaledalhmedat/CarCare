@@ -12,8 +12,14 @@ use Illuminate\Support\Facades\DB;
 class CarwashService
 {
     public function __construct(
-        protected CarwashRepositoryInterface $repository
+        protected CarwashRepositoryInterface $repository,
+        protected NotificationService $notifications
     ) {}
+
+    private function resolveWasherUser(int $carWasherId): ?User
+    {
+        return CarWasher::find($carWasherId)?->user;
+    }
 
 
     public function getAvailableCarWashers(array $filters = [])
@@ -84,26 +90,97 @@ class CarwashService
                 throw new \Exception('المركبة غير موجودة أو لا تخصك');
             }
 
+            // السعر يُحسب من أسعار المغسلة نفسها ولا يُؤخذ من الطلب أبداً
+            $servicePrices = $carWasher->service_prices ?? [];
+            if (!array_key_exists($data['service_type'], $servicePrices)) {
+                throw new \Exception('نوع الخدمة غير متوفر لدى هذه المغسلة');
+            }
+
+            $data['price'] = $servicePrices[$data['service_type']];
+            $data['status'] = CarwashBooking::STATUS_PENDING;
+
             $booking = $this->repository->createForUser($user, $data);
 
             DB::commit();
-            return $booking->load(['vehicle', 'carWasher']);
+            $booking = $booking->load(['vehicle', 'carWasher']);
         } catch (\Exception $e) {
             DB::rollBack();
             throw $e;
         }
+
+        $washerUser = $this->resolveWasherUser($carWasher->id);
+        if ($washerUser && $washerUser->id !== $user->id) {
+            $this->notifications->notifyUser(
+                $washerUser,
+                'carwash_booking_received',
+                'تم استلام طلب غسيل جديد',
+                'تلقيت طلب غسيل جديد',
+                [
+                    'entity_type' => 'carwash_booking',
+                    'entity_id' => $booking->id,
+                    'action' => 'open_details',
+                    'status' => 'pending',
+                    'car_washer_id' => $carWasher->id,
+                ]
+            );
+        }
+
+        return $booking;
     }
 
 
     public function cancelBooking(int $id, User $user, string $reason): bool
     {
-        $booking = $this->getBooking($id, $user);
+        // فحص سريع اختياري فقط لرسالة خطأ مبكرة؛ التحقق الموثوق يتم داخل القفل أدناه
+        $this->getBooking($id, $user);
 
-        if (!in_array($booking->status, ['pending', 'accepted'])) {
-            throw new \Exception('لا يمكن إلغاء الحجز في هذه المرحلة');
+        $result = DB::transaction(function () use ($id, $user, $reason) {
+            $booking = CarwashBooking::where('id', $id)
+                ->where('user_id', $user->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$booking) {
+                throw new \Exception('الحجز غير موجود أو لا تملك صلاحية الوصول إليه');
+            }
+
+            if (!in_array($booking->status, ['pending', 'accepted'])) {
+                throw new \Exception('لا يمكن إلغاء الحجز في هذه المرحلة');
+            }
+
+            // نلتقط مغسلة الحجز قبل الإلغاء؛ الحجز مُسند لمغسلة منذ الإنشاء (car_washer_id مطلوب حينها)
+            $assignedCarWasherId = $booking->car_washer_id;
+
+            $cancelled = $this->repository->cancel($booking, $reason);
+
+            return [
+                'cancelled' => $cancelled,
+                'booking_id' => $booking->id,
+                'car_washer_id' => $assignedCarWasherId,
+            ];
+        });
+
+        if ($result['cancelled'] && $result['car_washer_id']) {
+            $washerUser = $this->resolveWasherUser($result['car_washer_id']);
+            if ($washerUser && $washerUser->id !== $user->id) {
+                $this->notifications->notifyUser(
+                    $washerUser,
+                    'carwash_booking_cancelled_by_customer',
+                    'تم إلغاء طلب الغسيل',
+                    'قام العميل بإلغاء طلب الغسيل',
+                    [
+                        'entity_type' => 'carwash_booking',
+                        'entity_id' => $result['booking_id'],
+                        'action' => 'open_details',
+                        'status' => 'cancelled',
+                        'car_washer_id' => $result['car_washer_id'],
+                        'reason' => $reason,
+                    ]
+                );
+            }
         }
 
-        return $this->repository->cancel($booking, $reason);
+        return $result['cancelled'];
     }
 
 
@@ -119,19 +196,43 @@ class CarwashService
             throw new \Exception('حسابك كمغسلة لم يتم اعتماده بعد من الإدارة');
         }
 
-        $booking = $this->repository->find($bookingId);
+        $booking = DB::transaction(function () use ($carWasher, $bookingId) {
+            $booking = CarwashBooking::where('id', $bookingId)
+                ->where('car_washer_id', $carWasher->id)
+                ->lockForUpdate()
+                ->first();
 
-        if (!$booking || $booking->car_washer_id !== $carWasher->id) {
-            throw new \Exception('الطلب غير موجود');
+            if (!$booking) {
+                throw new \Exception('الطلب غير موجود');
+            }
+
+            if ($booking->status !== 'pending') {
+                throw new \Exception('هذا الطلب غير متاح للقبول');
+            }
+
+            $this->repository->accept($booking);
+
+            return $booking->fresh();
+        });
+
+        $customer = $booking->user;
+        if ($customer && $customer->id !== $user->id) {
+            $this->notifications->notifyUser(
+                $customer,
+                'carwash_booking_accepted',
+                'تم قبول طلب الغسيل',
+                'تم قبول طلب الغسيل الخاص بك',
+                [
+                    'entity_type' => 'carwash_booking',
+                    'entity_id' => $booking->id,
+                    'action' => 'open_details',
+                    'status' => 'accepted',
+                    'car_washer_id' => $carWasher->id,
+                ]
+            );
         }
 
-        if ($booking->status !== 'pending') {
-            throw new \Exception('هذا الطلب غير متاح للقبول');
-        }
-
-        $this->repository->accept($booking);
-
-        return $booking->fresh();
+        return $booking;
     }
 
 
@@ -143,19 +244,44 @@ class CarwashService
             throw new \Exception('لم تقم بإدخال معلومات مغسلتك بعد');
         }
 
-        $booking = $this->repository->find($bookingId);
+        $booking = DB::transaction(function () use ($carWasher, $bookingId, $reason) {
+            $booking = CarwashBooking::where('id', $bookingId)
+                ->where('car_washer_id', $carWasher->id)
+                ->lockForUpdate()
+                ->first();
 
-        if (!$booking || $booking->car_washer_id !== $carWasher->id) {
-            throw new \Exception('الطلب غير موجود');
+            if (!$booking) {
+                throw new \Exception('الطلب غير موجود');
+            }
+
+            if ($booking->status !== 'pending') {
+                throw new \Exception('لا يمكن رفض هذا الطلب حالياً');
+            }
+
+            $this->repository->reject($booking, $reason);
+
+            return $booking->fresh();
+        });
+
+        $customer = $booking->user;
+        if ($customer && $customer->id !== $user->id) {
+            $this->notifications->notifyUser(
+                $customer,
+                'carwash_booking_rejected',
+                'تم رفض طلب الغسيل',
+                'تم رفض طلب الغسيل الخاص بك',
+                [
+                    'entity_type' => 'carwash_booking',
+                    'entity_id' => $booking->id,
+                    'action' => 'open_details',
+                    'status' => 'cancelled',
+                    'car_washer_id' => $carWasher->id,
+                    'reason' => $reason,
+                ]
+            );
         }
 
-        if ($booking->status !== 'pending') {
-            throw new \Exception('لا يمكن رفض هذا الطلب حالياً');
-        }
-
-        $this->repository->reject($booking, $reason);
-
-        return $booking->fresh();
+        return $booking;
     }
 
 
@@ -179,25 +305,66 @@ class CarwashService
             throw new \Exception('لم تقم بإدخال معلومات مغسلتك بعد');
         }
 
-        $booking = $this->repository->find($bookingId);
-
-        if (!$booking || $booking->car_washer_id !== $carWasher->id) {
-            throw new \Exception('الطلب غير موجود');
-        }
-
         if (!in_array($status, ['in_progress', 'completed'])) {
             throw new \Exception('الحالة غير صحيحة');
         }
 
         // only allow forward transitions; blocks completing a cancelled/completed/pending booking
         $allowedFrom = ['in_progress' => ['accepted'], 'completed' => ['accepted', 'in_progress']];
-        if (!in_array($booking->status, $allowedFrom[$status], true)) {
-            throw new \Exception('لا يمكن تحديث حالة الحجز في وضعه الحالي');
+
+        $booking = DB::transaction(function () use ($carWasher, $bookingId, $status, $allowedFrom) {
+            $booking = CarwashBooking::where('id', $bookingId)
+                ->where('car_washer_id', $carWasher->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$booking) {
+                throw new \Exception('الطلب غير موجود');
+            }
+
+            if (!in_array($booking->status, $allowedFrom[$status], true)) {
+                throw new \Exception('لا يمكن تحديث حالة الحجز في وضعه الحالي');
+            }
+
+            $this->repository->updateStatus($booking, $status);
+
+            return $booking->fresh();
+        });
+
+        $customer = $booking->user;
+        if ($customer && $customer->id !== $user->id) {
+            if ($status === 'in_progress') {
+                $this->notifications->notifyUser(
+                    $customer,
+                    'carwash_booking_in_progress',
+                    'جاري غسيل السيارة',
+                    'بدأت المغسلة بغسيل سيارتك',
+                    [
+                        'entity_type' => 'carwash_booking',
+                        'entity_id' => $booking->id,
+                        'action' => 'open_details',
+                        'status' => 'in_progress',
+                        'car_washer_id' => $carWasher->id,
+                    ]
+                );
+            } elseif ($status === 'completed') {
+                $this->notifications->notifyUser(
+                    $customer,
+                    'carwash_booking_completed',
+                    'تم إكمال غسيل السيارة',
+                    'تم إكمال غسيل سيارتك بنجاح',
+                    [
+                        'entity_type' => 'carwash_booking',
+                        'entity_id' => $booking->id,
+                        'action' => 'open_details',
+                        'status' => 'completed',
+                        'car_washer_id' => $carWasher->id,
+                    ]
+                );
+            }
         }
 
-        $this->repository->updateStatus($booking, $status);
-
-        return $booking->fresh();
+        return $booking;
     }
 
 

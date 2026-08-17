@@ -16,7 +16,10 @@ class SosService
 {
     use HaversineTrait;
 
-    public function __construct(protected SosRepositoryInterface $repository) {}
+    public function __construct(
+        protected SosRepositoryInterface $repository,
+        protected NotificationService $notifications
+    ) {}
 
 
     public function createRequest(User $user, array $data): SosRequest
@@ -53,7 +56,7 @@ class SosService
                     broadcast(new NewSosRequest($sosRequest, $technician, $technician->distance));
                 }
 
-                Log::info('✅ SOS: Notified ' . $nearbyTechnicians->count() . ' technicians by coordinates', [
+                Log::info(' SOS: Notified ' . $nearbyTechnicians->count() . ' technicians by coordinates', [
                     'sos_id' => $sosRequest->id,
                     'technicians' => $nearbyTechnicians->pluck('id')->toArray()
                 ]);
@@ -81,7 +84,7 @@ class SosService
                     broadcast(new NewSosRequest($sosRequest, $technician, null));
                 }
 
-                Log::info('✅ SOS: Notified ' . $cityTechnicians->count() . ' technicians in city: ' . $city, [
+                Log::info(' SOS: Notified ' . $cityTechnicians->count() . ' technicians in city: ' . $city, [
                     'sos_id' => $sosRequest->id,
                     'technicians' => $cityTechnicians->pluck('id')->toArray()
                 ]);
@@ -137,6 +140,30 @@ class SosService
         if (!in_array($request->status, ['open', 'accepted'])) {
             throw new \Exception('لا يمكن إلغاء الطلب في هذه المرحلة');
         }
-        return $this->repository->cancel($request, $reason);
+
+        $assignedTechnicianId = $request->technician_id;
+
+        $cancelled = $this->repository->cancel($request, $reason);
+
+        if ($cancelled && $assignedTechnicianId) {
+            $technician = User::find($assignedTechnicianId);
+            if ($technician && $technician->id !== $user->id) {
+                $this->notifications->notifyUser(
+                    $technician,
+                    'sos_cancelled_by_customer',
+                    'تم إلغاء طلب الطوارئ',
+                    'قام العميل بإلغاء طلب الطوارئ',
+                    [
+                        'entity_type' => 'sos_request',
+                        'entity_id' => $request->id,
+                        'action' => 'open_details',
+                        'status' => 'cancelled',
+                        'reason' => $reason,
+                    ]
+                );
+            }
+        }
+
+        return $cancelled;
     }
 }

@@ -21,6 +21,7 @@ class FuelOrder extends Model
         'delivery_address',
         'delivery_latitude',
         'delivery_longitude',
+        'city',
         'total_price',
         'status',
         'scheduled_time',
@@ -29,6 +30,8 @@ class FuelOrder extends Model
         'completed_at',
         'cancellation_reason',
         'notes',
+        'estimated_arrival_minutes',
+        'provider_notes',
     ];
 
     protected $casts = [
@@ -40,6 +43,7 @@ class FuelOrder extends Model
         'delivery_longitude' => 'decimal:7',
         'amount' => 'float',
         'total_price' => 'decimal:2',
+        'estimated_arrival_minutes' => 'integer',
     ];
 
     public function user()

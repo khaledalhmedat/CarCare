@@ -6,6 +6,7 @@ use App\Models\SosRequest;
 use App\Models\TrackingPoint;
 use App\Events\TechnicianLocationUpdated;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class TrackingService
 {
@@ -22,15 +23,21 @@ class TrackingService
             ]);
         });
 
-        // بعد ما الـ transaction يكتمل نبعت الـ event
-        event(new TechnicianLocationUpdated(
-            $sosRequest->id,
-            $technicianId,
-            $data['lat'],
-            $data['lng'],
-            $data['heading'] ?? null,
-            $data['speed'] ?? null
-        ));
+        try {
+            event(new TechnicianLocationUpdated(
+                $sosRequest->id,
+                $technicianId,
+                $data['lat'],
+                $data['lng'],
+                $data['heading'] ?? null,
+                $data['speed'] ?? null
+            ));
+        } catch (\Throwable $e) {
+            Log::warning('tracking.location.broadcast_failed', [
+                'sos_id' => $sosRequest->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return $point;
     }

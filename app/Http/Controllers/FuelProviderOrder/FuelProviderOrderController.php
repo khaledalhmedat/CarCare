@@ -20,14 +20,7 @@ class FuelProviderOrderController extends Controller
     {
         $provider = $request->user()->fuelProvider;
 
-        $lat = $provider?->latitude;
-        $lng = $provider?->longitude;
-
-        $orders = $this->orderService->getAvailableOrders(
-            $request->get('city'),
-            $lat,
-            $lng
-        );
+        $orders = $this->orderService->getAvailableOrders($provider);
 
         return response()->json([
             'success' => true,
