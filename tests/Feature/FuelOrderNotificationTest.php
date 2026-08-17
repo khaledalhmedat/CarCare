@@ -29,6 +29,7 @@ class FuelOrderNotificationTest extends TestCase
             'user_id' => $providerUser->id, 'company_name' => 'FuelCo', 'phone' => '05',
             'city' => 'دمشق', 'address' => 'x', 'status' => 'approved', 'is_available' => true,
             'fuel_types' => ['95', '98', 'diesel'],
+            'latitude' => 33.5460, 'longitude' => 36.3249,
         ]);
 
         return $providerUser;
@@ -50,6 +51,7 @@ class FuelOrderNotificationTest extends TestCase
         return FuelOrder::create([
             'user_id' => $customer->id, 'vehicle_id' => $vehicle->id,
             'fuel_type' => '95', 'amount' => 20, 'delivery_address' => 'دمشق',
+            'delivery_latitude' => 33.5460, 'delivery_longitude' => 36.3249,
             'status' => 'pending',
         ]);
     }

@@ -7,6 +7,7 @@ use App\Http\Requests\Sos\AcceptSosRequest;
 use App\Http\Requests\Sos\CancelSosRequest;
 use App\Http\Resources\SosResource;
 use App\Services\TechnicianSosService;
+use App\Exceptions\ServiceAcceptanceException;
 use Illuminate\Http\Request;
 
 class TechnicianSosController extends Controller
@@ -55,7 +56,17 @@ class TechnicianSosController extends Controller
 
     public function acceptRequest(AcceptSosRequest $request, int $id)
     {
-        $sosRequest = $this->sosService->acceptRequest($request->user(), $id, $request->validated());
+        try {
+            $sosRequest = $this->sosService->acceptRequest($request->user(), $id, $request->validated());
+        } catch (ServiceAcceptanceException $e) {
+            return response()->json([
+                'success' => false,
+                'code' => $e->errorCode(),
+                'message' => $e->getMessage(),
+                'data' => $e->context(),
+            ], $e->httpStatus());
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'تم قبول طلب الطوارئ بنجاح',

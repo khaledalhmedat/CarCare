@@ -26,6 +26,7 @@ class SosNotificationTest extends TestCase
         Technician::create([
             'user_id' => $techUser->id, 'specialization' => 'm', 'experience_years' => 2,
             'phone' => '05', 'city' => 'دمشق', 'status' => 'approved',
+            'latitude' => 33.54, 'longitude' => 36.32,
         ]);
 
         return $techUser;

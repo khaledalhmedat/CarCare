@@ -15,12 +15,16 @@ use Illuminate\Support\Facades\Log;
 use App\Events\NewEmergencyFuelOrder;
 use App\Helpers\HaversineTrait;
 use App\Models\FuelOrderTrackingPoint;
+use App\Exceptions\ServiceAcceptanceException;
 
 
 
 
 class FuelProviderOrderService
 {
+    // Kept in sync with the 30km radius used by getAvailableOrders() below.
+    private const MAX_SERVICE_DISTANCE_KM = 30;
+
     public function __construct(
         protected FuelOrderRepositoryInterface $repository,
         protected NotificationService $notifications
@@ -101,6 +105,16 @@ class FuelProviderOrderService
             throw new \Exception('حسابك كمزود وقود لم يتم اعتماده بعد من الإدارة');
         }
 
+        // Pre-acceptance checks: read-only, done before the row lock below so a
+        // provider that's out of range or doesn't carry this fuel type never
+        // mutates the order. Loaded outside the transaction on purpose — this
+        // only reads fields that don't change (fuel_type, delivery coordinates).
+        $orderForChecks = FuelOrder::find($orderId);
+        if ($orderForChecks) {
+            $this->assertWithinServiceRange($fuelProvider, $orderForChecks);
+            $this->assertFuelTypeSupported($fuelProvider, $orderForChecks);
+        }
+
         // Lock the row so two providers cannot claim the same pending order:
         // whoever acquires the lock first accepts; the other re-reads 'accepted' and is rejected.
         $order = DB::transaction(function () use ($fuelProvider, $orderId, $data) {
@@ -158,6 +172,57 @@ class FuelProviderOrderService
         }
 
         return $order;
+    }
+
+    /**
+     * Mirrors the distance rule already enforced in getAvailableOrders() above,
+     * but as a hard gate on acceptance instead of a listing filter.
+     */
+    private function assertWithinServiceRange(FuelProvider $fuelProvider, FuelOrder $order): void
+    {
+        if (!$fuelProvider->latitude || !$fuelProvider->longitude) {
+            throw new ServiceAcceptanceException(
+                'تعذر التحقق من نطاق الخدمة لأن موقع مقدم الخدمة غير محدد.',
+                'PROVIDER_LOCATION_REQUIRED'
+            );
+        }
+
+        if (!$order->delivery_latitude || !$order->delivery_longitude) {
+            throw new ServiceAcceptanceException(
+                'تعذر التحقق من نطاق الخدمة لأن موقع تسليم الطلب غير محدد.',
+                'DELIVERY_LOCATION_REQUIRED'
+            );
+        }
+
+        $distance = $this->calculateDistance(
+            (float) $fuelProvider->latitude,
+            (float) $fuelProvider->longitude,
+            (float) $order->delivery_latitude,
+            (float) $order->delivery_longitude
+        );
+
+        if ($distance > self::MAX_SERVICE_DISTANCE_KM) {
+            throw new ServiceAcceptanceException(
+                'الطلب خارج نطاق التغطية. لا يمكن قبول الطلبات التي تبعد أكثر من 30 كم عن موقعك.',
+                'OUT_OF_SERVICE_RANGE',
+                [
+                    'max_distance_km' => self::MAX_SERVICE_DISTANCE_KM,
+                    'distance_km' => round($distance, 2),
+                ]
+            );
+        }
+    }
+
+    private function assertFuelTypeSupported(FuelProvider $fuelProvider, FuelOrder $order): void
+    {
+        $fuelTypes = $fuelProvider->fuel_types ?? [];
+
+        if (!in_array($order->fuel_type, $fuelTypes, true)) {
+            throw new ServiceAcceptanceException(
+                'نوع الوقود المطلوب غير متاح لدى هذا المزود.',
+                'UNSUPPORTED_FUEL_TYPE'
+            );
+        }
     }
 
 

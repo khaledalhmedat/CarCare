@@ -9,6 +9,7 @@ use App\Http\Requests\FuelProvider\CancelFuelOrderRequest;
 use App\Http\Requests\FuelProvider\UpdateLocationRequest;
 use App\Http\Resources\FuelOrderResource;
 use App\Services\FuelProviderOrderService;
+use App\Exceptions\ServiceAcceptanceException;
 use Illuminate\Http\Request;
 
 class FuelProviderOrderController extends Controller
@@ -42,11 +43,20 @@ class FuelProviderOrderController extends Controller
 
     public function acceptOrder(AcceptFuelOrderRequest $request, int $orderId)
     {
-        $order = $this->orderService->acceptOrder(
-            $request->user(),
-            $orderId,
-            $request->validated()
-        );
+        try {
+            $order = $this->orderService->acceptOrder(
+                $request->user(),
+                $orderId,
+                $request->validated()
+            );
+        } catch (ServiceAcceptanceException $e) {
+            return response()->json([
+                'success' => false,
+                'code' => $e->errorCode(),
+                'message' => $e->getMessage(),
+                'data' => $e->context(),
+            ], $e->httpStatus());
+        }
 
         return response()->json([
             'success' => true,

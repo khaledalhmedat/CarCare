@@ -4,16 +4,21 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Models\SosRequest;
+use App\Models\Technician;
 use App\Repositories\Contracts\SosRepositoryInterface;
 use App\Events\SosRequestAccepted;
 use App\Events\SosRequestStatusUpdated;
 use App\Events\SosRequestCancelled;
 use App\Events\NewSosRequest;
+use App\Exceptions\ServiceAcceptanceException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class TechnicianSosService
 {
+    // Kept in sync with the 30km radius used by getAvailableRequests() below.
+    private const MAX_SERVICE_DISTANCE_KM = 30;
+
     public function __construct(
         protected SosRepositoryInterface $repository,
         protected NotificationService $notifications
@@ -122,6 +127,14 @@ class TechnicianSosService
             throw new \Exception('حسابك كتقني لم يتم اعتماده بعد من الإدارة');
         }
 
+        // Pre-acceptance range check: read-only, done before the row lock below so
+        // an out-of-range technician never mutates the request. Loaded outside the
+        // transaction on purpose — this only reads coordinates that don't change.
+        $requestForRangeCheck = SosRequest::find($requestId);
+        if ($requestForRangeCheck) {
+            $this->assertWithinServiceRange($technicianProfile, $requestForRangeCheck);
+        }
+
         // Lock the row so two technicians cannot claim the same open request:
         // whoever acquires the lock first accepts; the other re-reads 'accepted' and is rejected.
         $sosRequest = DB::transaction(function () use ($technician, $requestId) {
@@ -169,6 +182,46 @@ class TechnicianSosService
         }
 
         return $sosRequest->fresh(['user', 'vehicle']);
+    }
+
+    /**
+     * Mirrors the distance rule already enforced in getAvailableRequests() above,
+     * but as a hard gate on acceptance instead of a listing filter.
+     */
+    private function assertWithinServiceRange(Technician $technicianProfile, SosRequest $sosRequest): void
+    {
+        if (!$technicianProfile->latitude || !$technicianProfile->longitude) {
+            throw new ServiceAcceptanceException(
+                'تعذر التحقق من نطاق الخدمة لأن موقع مقدم الخدمة غير محدد.',
+                'PROVIDER_LOCATION_REQUIRED'
+            );
+        }
+
+        // lat/lng are NOT NULL on sos_requests, but guard defensively anyway.
+        if (!$sosRequest->lat || !$sosRequest->lng) {
+            throw new ServiceAcceptanceException(
+                'تعذر التحقق من نطاق الخدمة لأن موقع الطلب غير محدد.',
+                'REQUEST_LOCATION_REQUIRED'
+            );
+        }
+
+        $distance = $this->calculateDistance(
+            $technicianProfile->latitude,
+            $technicianProfile->longitude,
+            $sosRequest->lat,
+            $sosRequest->lng
+        );
+
+        if ($distance > self::MAX_SERVICE_DISTANCE_KM) {
+            throw new ServiceAcceptanceException(
+                'الطلب خارج نطاق التغطية. لا يمكن قبول الطلبات التي تبعد أكثر من 30 كم عن موقعك.',
+                'OUT_OF_SERVICE_RANGE',
+                [
+                    'max_distance_km' => self::MAX_SERVICE_DISTANCE_KM,
+                    'distance_km' => round($distance, 2),
+                ]
+            );
+        }
     }
 
     public function updateStatus(User $technician, int $requestId, string $status): SosRequest
