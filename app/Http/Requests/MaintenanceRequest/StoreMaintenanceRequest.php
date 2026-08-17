@@ -20,7 +20,7 @@ class StoreMaintenanceRequest extends FormRequest
             'preferred_date' => ['nullable', 'date', 'after:today'],
 
             'images' => ['nullable', 'array', 'max:5'],
-            'images.*' => ['image', 'mimes:jpeg,png,jpg', 'max:2048'],
+            'images.*' => ['image', 'mimes:jpeg,png,jpg', 'max:5120'],
         ];
     }
 
