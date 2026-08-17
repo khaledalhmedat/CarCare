@@ -207,4 +207,49 @@ class MaintenanceJobStatusTest extends TestCase
         $this->assertEquals('in_progress', $job->fresh()->status);
         $this->assertEquals(0, \Illuminate\Notifications\DatabaseNotification::count());
     }
+
+    public function test_completed_requests_list_survives_soft_deleted_vehicle(): void
+    {
+        $tech = $this->makeApprovedTechnician();
+        [$customer, $request, $job] = $this->makeJob($tech, 'assigned');
+        Sanctum::actingAs($tech);
+        $this->patchJson("/api/technician/jobs/{$job->id}/status", [
+            'status' => 'completed', 'completion_notes' => 'تم بنجاح',
+        ])->assertOk();
+
+        $vehicle = $request->vehicle;
+        $vehicle->delete();
+
+        Sanctum::actingAs($customer);
+
+        $this->getJson('/api/maintenance-requests')
+            ->assertOk()
+            ->assertJsonPath('data.0.maintenance_record.vehicle', null);
+
+        $this->getJson('/api/maintenance-requests/filter/completed')
+            ->assertOk()
+            ->assertJsonPath('data.0.maintenance_record.vehicle', null);
+    }
+
+    public function test_completed_requests_list_survives_soft_deleted_technician(): void
+    {
+        $tech = $this->makeApprovedTechnician();
+        [$customer, $request, $job] = $this->makeJob($tech, 'assigned');
+        Sanctum::actingAs($tech);
+        $this->patchJson("/api/technician/jobs/{$job->id}/status", [
+            'status' => 'completed', 'completion_notes' => 'تم بنجاح',
+        ])->assertOk();
+
+        $tech->delete();
+
+        Sanctum::actingAs($customer);
+
+        $this->getJson('/api/maintenance-requests')
+            ->assertOk()
+            ->assertJsonPath('data.0.maintenance_record.technician', null);
+
+        $this->getJson('/api/maintenance-requests/filter/completed')
+            ->assertOk()
+            ->assertJsonPath('data.0.maintenance_record.technician', null);
+    }
 }

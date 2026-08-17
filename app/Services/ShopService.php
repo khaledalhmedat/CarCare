@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\Shop;
 use App\Models\Product;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Role;
 use App\Repositories\Contracts\ShopRepositoryInterface;
 use Illuminate\Support\Facades\DB;
@@ -13,7 +14,10 @@ use Illuminate\Support\Facades\Storage;
 
 class ShopService
 {
-    public function __construct(protected ShopRepositoryInterface $repository) {}
+    public function __construct(
+        protected ShopRepositoryInterface $repository,
+        protected NotificationService $notifications
+    ) {}
 
     public function getProfile(User $user): ?Shop
     {
@@ -189,50 +193,188 @@ public function acceptOrder(User $user, int $orderId): Order
         throw new \Exception('متجرك لم يتم اعتماده بعد من الإدارة');
     }
 
-    $order = $this->getShopOrder($user, $orderId);
+    $order = DB::transaction(function () use ($shop, $orderId) {
+        $order = Order::where('id', $orderId)
+            ->where('shop_id', $shop->id)
+            ->lockForUpdate()
+            ->first();
 
-    if ($order->status !== 'pending') {
-        throw new \Exception('لا يمكن قبول هذا الطلب حالياً');
+        if (!$order) {
+            throw new \Exception('الطلب غير موجود');
+        }
+
+        if ($order->status !== 'pending') {
+            throw new \Exception('لا يمكن قبول هذا الطلب حالياً');
+        }
+
+        $this->repository->updateOrderStatus($order, 'accepted');
+
+        return $order->fresh();
+    });
+
+    $customer = $order->user;
+    if ($customer && $customer->id !== $user->id) {
+        $this->notifications->notifyUser(
+            $customer,
+            'spare_parts_order_accepted',
+            'تم قبول طلب قطع الغيار',
+            'وافق المتجر على طلب قطع الغيار الخاص بك',
+            [
+                'entity_type' => 'spare_parts_order',
+                'entity_id' => $order->id,
+                'action' => 'open_details',
+                'status' => 'accepted',
+                'shop_id' => $shop->id,
+            ]
+        );
     }
 
-    $this->repository->updateOrderStatus($order, 'accepted');
-    return $order->fresh();
+    return $order;
 }
 
 public function rejectOrder(User $user, int $orderId, string $reason): Order
 {
-    $order = $this->getShopOrder($user, $orderId);
-
-    if ($order->status !== 'pending') {
-        throw new \Exception('لا يمكن رفض هذا الطلب حالياً');
+    $shop = $this->repository->findByUser($user);
+    if (!$shop) {
+        throw new \Exception('لم تقم بإدخال معلومات متجرك بعد');
     }
 
-    $this->repository->rejectOrder($order, $reason);
-    return $order->fresh();
+    $order = DB::transaction(function () use ($shop, $orderId, $reason) {
+        $order = Order::where('id', $orderId)
+            ->where('shop_id', $shop->id)
+            ->lockForUpdate()
+            ->first();
+
+        if (!$order) {
+            throw new \Exception('الطلب غير موجود');
+        }
+
+        if ($order->status !== 'pending') {
+            throw new \Exception('لا يمكن رفض هذا الطلب حالياً');
+        }
+
+        // ترتيب الأقفال: Order ثم OrderItems ثم Products
+        $orderItems = OrderItem::where('order_id', $order->id)
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        $productIds = $orderItems->pluck('product_id')->unique()->sort()->values();
+
+        $products = Product::whereIn('id', $productIds)
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get()
+            ->keyBy('id');
+
+        $quantitiesToRestore = [];
+        foreach ($orderItems as $item) {
+            $quantitiesToRestore[$item->product_id] = ($quantitiesToRestore[$item->product_id] ?? 0) + $item->quantity;
+        }
+
+        foreach ($quantitiesToRestore as $productId => $quantity) {
+            $product = $products->get($productId);
+            if ($product) {
+                $product->increment('stock_quantity', $quantity);
+            }
+        }
+
+        $this->repository->rejectOrder($order, $reason);
+
+        return $order->fresh();
+    });
+
+    $customer = $order->user;
+    if ($customer && $customer->id !== $user->id) {
+        $this->notifications->notifyUser(
+            $customer,
+            'spare_parts_order_rejected',
+            'تم رفض طلب قطع الغيار',
+            'رفض المتجر طلب قطع الغيار الخاص بك',
+            [
+                'entity_type' => 'spare_parts_order',
+                'entity_id' => $order->id,
+                'action' => 'open_details',
+                'status' => 'cancelled',
+                'shop_id' => $shop->id,
+                'reason' => $order->cancellation_reason,
+            ]
+        );
+    }
+
+    return $order;
 }
 
 
 public function updateOrderStatus(User $user, int $orderId, string $status, ?string $notes = null): Order
 {
-    $order = $this->getShopOrder($user, $orderId);
+    $shop = $this->repository->findByUser($user);
+    if (!$shop) {
+        throw new \Exception('لم تقم بإدخال معلومات متجرك بعد');
+    }
 
     $allowedStatuses = ['processing', 'out_for_delivery', 'delivered'];
     if (!in_array($status, $allowedStatuses)) {
         throw new \Exception('الحالة غير صحيحة');
     }
 
-    if ($status === 'processing' && $order->status !== 'accepted') {
-        throw new \Exception('لا يمكن تجهيز طلب لم يتم قبوله بعد');
-    }
-    if ($status === 'out_for_delivery' && $order->status !== 'processing') {
-        throw new \Exception('لا يمكن بدء التوصيل قبل تجهيز الطلب');
-    }
-    if ($status === 'delivered' && $order->status !== 'out_for_delivery') {
-        throw new \Exception('لا يمكن تأكيد التوصيل قبل بدء التوصيل');
+    // كل حالة هدف لها حالة سابقة واحدة مسموحة فقط، والتحقق يتم على الصف المقفول أدناه
+    $allowedFrom = [
+        'processing' => 'accepted',
+        'out_for_delivery' => 'processing',
+        'delivered' => 'out_for_delivery',
+    ];
+
+    $errorMessages = [
+        'processing' => 'لا يمكن تجهيز طلب لم يتم قبوله بعد',
+        'out_for_delivery' => 'لا يمكن بدء التوصيل قبل تجهيز الطلب',
+        'delivered' => 'لا يمكن تأكيد التوصيل قبل بدء التوصيل',
+    ];
+
+    $order = DB::transaction(function () use ($shop, $orderId, $status, $allowedFrom, $errorMessages) {
+        $order = Order::where('id', $orderId)
+            ->where('shop_id', $shop->id)
+            ->lockForUpdate()
+            ->first();
+
+        if (!$order) {
+            throw new \Exception('الطلب غير موجود');
+        }
+
+        if ($order->status !== $allowedFrom[$status]) {
+            throw new \Exception($errorMessages[$status]);
+        }
+
+        $this->repository->updateOrderStatus($order, $status);
+
+        return $order->fresh();
+    });
+
+    $customer = $order->user;
+    if ($customer && $customer->id !== $user->id) {
+        $notificationsByStatus = [
+            'processing' => ['spare_parts_order_processing', 'جاري تجهيز طلبك', 'بدأ المتجر بتجهيز طلب قطع الغيار الخاص بك'],
+            'out_for_delivery' => ['spare_parts_order_out_for_delivery', 'طلبك في طريقه إليك', 'تم تجهيز طلب قطع الغيار وخرج للتوصيل'],
+            'delivered' => ['spare_parts_order_delivered', 'تم تسليم طلبك', 'تم تسليم طلب قطع الغيار بنجاح'],
+        ];
+        [$type, $title, $body] = $notificationsByStatus[$status];
+
+        $this->notifications->notifyUser(
+            $customer,
+            $type,
+            $title,
+            $body,
+            [
+                'entity_type' => 'spare_parts_order',
+                'entity_id' => $order->id,
+                'action' => 'open_details',
+                'status' => $status,
+                'shop_id' => $shop->id,
+            ]
+        );
     }
 
-    $this->repository->updateOrderStatus($order, $status);
-    return $order->fresh();
+    return $order;
 }
 
 

@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ProviderApprovalController;
 use App\Http\Controllers\Admin\ProviderBillingStatusController;
 use App\Http\Controllers\Admin\ProviderInvoiceController;
+use App\Http\Controllers\Provider\ProviderInvoiceController as ProviderInvoiceReadController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\GoogleAuthController;
@@ -103,6 +104,13 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/billing')->grou
     Route::post('/invoices/{id}/issue', [ProviderInvoiceController::class, 'issue']);
     Route::post('/invoices/{id}/mark-paid', [ProviderInvoiceController::class, 'markPaid']);
     Route::post('/invoices/{id}/cancel', [ProviderInvoiceController::class, 'cancel']);
+});
+
+// Read-only: مزود الخدمة المصادق يرى فواتيره الخاصة فقط (بلا أي تعديل/تأكيد دفع).
+// لا يوجد دور واحد يغطي كل أنواع المزودين، فيُفرض ملكية الفاتورة داخل الخدمة عبر هوية المستخدم الفعلية.
+Route::middleware('auth:sanctum')->prefix('provider')->group(function () {
+    Route::get('/invoices', [ProviderInvoiceReadController::class, 'index']);
+    Route::get('/invoices/{id}', [ProviderInvoiceReadController::class, 'show']);
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/provider-approvals')->group(function () {

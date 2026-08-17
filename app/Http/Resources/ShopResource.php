@@ -21,11 +21,11 @@ class ShopResource extends JsonResource
             'rejected_at' => $this->rejected_at?->toDateTimeString(),
             'suspended_at' => $this->suspended_at?->toDateTimeString(),
 
-            'owner' => [
+            'owner' => $this->user ? [
                 'id' => $this->user->id,
                 'name' => $this->user->name,
                 'email' => $this->user->email,
-            ],
+            ] : null,
             'business_types' => $this->businessTypes->pluck('name'),
             'car_brands' => $this->carBrands->pluck('name'),
             'part_categories' => $this->partCategories->pluck('name'),

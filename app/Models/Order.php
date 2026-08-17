@@ -15,7 +15,7 @@ class Order extends Model
 
     protected $fillable = [
         'user_id', 'shop_id', 'total_price', 'status',
-        'customer_latitude', 'customer_longitude', 'delivery_address_note'
+        'customer_latitude', 'customer_longitude', 'delivery_address_note', 'cancellation_reason'
     ];
 
     protected $casts = [

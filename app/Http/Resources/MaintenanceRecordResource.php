@@ -19,19 +19,19 @@ class MaintenanceRecordResource extends JsonResource
             'completed_at' => $this->completed_at?->toDateTimeString(),
             'completed_ago' => $this->completed_at?->diffForHumans(),
 
-            'vehicle' => [
+            'vehicle' => $this->vehicle ? [
                 'id' => $this->vehicle->id,
                 'brand' => $this->vehicle->brand,
                 'model' => $this->vehicle->model,
                 'plate_number' => $this->vehicle->plate_number,
-            ],
+            ] : null,
 
             'technician' => $this->whenLoaded('serviceJob', function () {
-                return [
+                return $this->serviceJob->technician ? [
                     'id' => $this->serviceJob->technician->id,
                     'name' => $this->serviceJob->technician->name,
                     'phone' => $this->serviceJob->technician->phone,
-                ];
+                ] : null;
             }),
 
             'maintenance_request' => $this->whenLoaded('maintenanceRequest', function () {

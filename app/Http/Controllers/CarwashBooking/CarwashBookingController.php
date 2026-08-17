@@ -7,6 +7,8 @@ use App\Http\Requests\Carwash\StoreCarwashBookingRequest;
 use App\Http\Requests\Carwash\RateCarWasherRequest;
 use App\Http\Resources\CarWashRatingResource;
 use App\Http\Resources\CarwashBookingResource;
+use App\Http\Resources\PublicCarWasherResource;
+use App\Models\CarWasher;
 use App\Services\CarwashService;
 use Illuminate\Http\Request;
 
@@ -19,6 +21,7 @@ class CarwashBookingController extends Controller
     public function availableCarWashers(Request $request)
     {
         $carWashers = $this->carwashService->getAvailableCarWashers($request->only(['city', 'service']));
+        $carWashers->getCollection()->transform(fn (CarWasher $carWasher) => new PublicCarWasherResource($carWasher));
 
         return response()->json([
             'success' => true,
@@ -35,7 +38,7 @@ class CarwashBookingController extends Controller
             return response()->json(['success' => false, 'message' => 'المغسلة غير موجودة'], 404);
         }
 
-        return response()->json(['success' => true, 'data' => $carWasher]);
+        return response()->json(['success' => true, 'data' => new PublicCarWasherResource($carWasher)]);
     }
 
     public function store(StoreCarwashBookingRequest $request)
@@ -94,6 +97,12 @@ class CarwashBookingController extends Controller
 
     public function carWasherRatings(Request $request, int $carWasherId)
     {
+        $carWasher = CarWasher::find($carWasherId);
+
+        if (!$carWasher) {
+            return response()->json(['success' => false, 'message' => 'المغسلة غير موجودة'], 404);
+        }
+
         $ratings = $this->carwashService->getCarWasherRatings(
             $carWasherId,
             $request->get('per_page', 10)
@@ -103,8 +112,8 @@ class CarwashBookingController extends Controller
             'success' => true,
             'data' => CarWashRatingResource::collection($ratings),
             'meta' => [
-                'average_rating' => $ratings->first()?->carWasher->average_rating ?? 0,
-                'total_ratings' => $ratings->first()?->carWasher->ratings_count ?? 0,
+                'average_rating' => round($carWasher->average_rating, 2),
+                'total_ratings' => (int) $carWasher->ratings_count,
                 'total' => $ratings->total(),
                 'per_page' => $ratings->perPage(),
                 'current_page' => $ratings->currentPage(),
