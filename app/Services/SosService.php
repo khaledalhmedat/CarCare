@@ -54,6 +54,7 @@ class SosService
             if ($nearbyTechnicians->isNotEmpty()) {
                 foreach ($nearbyTechnicians as $technician) {
                     broadcast(new NewSosRequest($sosRequest, $technician, $technician->distance));
+                    $this->notifySosRecipient($technician->user_id, $sosRequest);
                 }
 
                 Log::info(' SOS: Notified ' . $nearbyTechnicians->count() . ' technicians by coordinates', [
@@ -82,6 +83,7 @@ class SosService
             if ($cityTechnicians->isNotEmpty()) {
                 foreach ($cityTechnicians as $technician) {
                     broadcast(new NewSosRequest($sosRequest, $technician, null));
+                    $this->notifySosRecipient($technician->user_id, $sosRequest);
                 }
 
                 Log::info(' SOS: Notified ' . $cityTechnicians->count() . ' technicians in city: ' . $city, [
@@ -101,6 +103,27 @@ class SosService
         }
     }
 
+
+    protected function notifySosRecipient(int $userId, SosRequest $sosRequest): void
+    {
+        $technicianUser = User::find($userId);
+
+        if (!$technicianUser) {
+            return;
+        }
+
+        $this->notifications->notifyUser(
+            $technicianUser,
+            'new_sos_request',
+            'طلب طوارئ جديد',
+            'يوجد طلب مساعدة طارئ بالقرب منك',
+            [
+                'entity_type' => 'sos_request',
+                'entity_id' => $sosRequest->id,
+                'status' => 'open',
+            ]
+        );
+    }
 
     protected function getNearbyTechnicians(float $lat, float $lng, int $radiusInKm = 30)
     {

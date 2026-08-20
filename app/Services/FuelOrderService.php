@@ -58,7 +58,6 @@ class FuelOrderService
             throw new \Exception('لا يمكن إلغاء الطلب في هذه المرحلة');
         }
 
-        // نلتقط مزود الطلب المُسند قبل الإلغاء؛ العلاقة fuelProvider.user محمّلة مسبقاً من الـ repository
         $assignedProviderId = $order->fuel_provider_id;
         $providerUser = $order->fuelProvider?->user;
 
@@ -150,6 +149,7 @@ class FuelOrderService
             if ($nearbyProviders->isNotEmpty()) {
                 foreach ($nearbyProviders as $provider) {
                     broadcast(new NewEmergencyFuelOrder($order, $provider, $provider->distance));
+                    $this->notifyEmergencyFuelRecipient($provider->user_id, $order);
                     $providersNotified[] = $provider->id;
                 }
 
@@ -166,6 +166,7 @@ class FuelOrderService
             if ($cityProviders->isNotEmpty()) {
                 foreach ($cityProviders as $provider) {
                     broadcast(new NewEmergencyFuelOrder($order, $provider, null));
+                    $this->notifyEmergencyFuelRecipient($provider->user_id, $order);
                     $providersNotified[] = $provider->id;
                 }
 
@@ -190,6 +191,27 @@ class FuelOrderService
         }
     }
 
+
+    protected function notifyEmergencyFuelRecipient(int $userId, FuelOrder $order): void
+    {
+        $providerUser = User::find($userId);
+
+        if (!$providerUser) {
+            return;
+        }
+
+        $this->notifications->notifyUser(
+            $providerUser,
+            'new_emergency_fuel_order',
+            'طلب وقود طارئ جديد',
+            'يوجد طلب وقود طارئ بالقرب منك',
+            [
+                'entity_type' => 'emergency_fuel_order',
+                'entity_id' => $order->id,
+                'status' => 'pending',
+            ]
+        );
+    }
 
     protected function getNearbyFuelProviders(float $lat, float $lng, int $radiusInKm = 30)
     {

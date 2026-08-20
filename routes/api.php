@@ -13,6 +13,7 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\ProfileImageController;
+use App\Http\Controllers\DeviceRegistrationController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\CarwashBooking\CarwashBookingController;
@@ -120,6 +121,11 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/provider-approv
     Route::post('/{type}/{id}/reject', [ProviderApprovalController::class, 'reject']);
     Route::post('/{type}/{id}/suspend', [ProviderApprovalController::class, 'suspend']);
     Route::post('/{type}/{id}/reactivate', [ProviderApprovalController::class, 'reactivate']);
+});
+
+Route::middleware('auth:sanctum')->prefix('devices')->group(function () {
+    Route::post('/register', [DeviceRegistrationController::class, 'store']);
+    Route::delete('/unregister', [DeviceRegistrationController::class, 'destroy']);
 });
 
 Route::middleware('auth:sanctum')->prefix('notifications')->group(function () {

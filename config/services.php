@@ -2,18 +2,6 @@
 
 return [
 
-    /*
-    |--------------------------------------------------------------------------
-    | Third Party Services
-    |--------------------------------------------------------------------------
-    |
-    | This file is for storing the credentials for third party services such
-    | as Mailgun, Postmark, AWS and more. This file provides the de facto
-    | location for this type of information, allowing packages to have
-    | a conventional file to locate the various service credentials.
-    |
-    */
-
     'mailgun' => [
         'domain' => env('MAILGUN_DOMAIN'),
         'secret' => env('MAILGUN_SECRET'),
@@ -32,12 +20,16 @@ return [
     ],
 
     'google' => [
-        // one or more allowed OAuth client IDs (comma-separated for web/android/ios).
-        // Used as the expected "aud" claim when verifying Google ID tokens.
         'client_id' => env('GOOGLE_CLIENT_ID'),
     ],
 
     'ai_service' => [
         'url' => env('AI_SERVICE_URL', 'http://127.0.0.1:5000'),
     ],
+
+    'firebase' => [
+        'project_id' => env('FIREBASE_PROJECT_ID'),
+        'credentials_path' => env('FIREBASE_CREDENTIALS_PATH'),
+    ],
+
 ];

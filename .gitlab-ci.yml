@@ -37,4 +37,7 @@ deploy:
     - cp "$ENV_FILE" .env
 
     - docker compose up -d --build --force-recreate --remove-orphans
+    
+    - docker exec carcarex-app php artisan down --retry=60
+    - docker exec carcarex-app2 php artisan down --retry=60
     - docker image prune -f

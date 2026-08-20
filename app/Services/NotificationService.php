@@ -1,10 +1,9 @@
 <?php
 
-// للتذكير: هذا الملف مسؤول عن حفظ إشعارات المستخدم وبثّها لحظياً عبر Reverb بشكل آمن.
-
 namespace App\Services;
 
 use App\Events\NotificationCreated;
+use App\Jobs\SendFcmNotification;
 use App\Models\User;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\Log;
@@ -49,6 +48,22 @@ class NotificationService
             ]));
         } catch (\Throwable $e) {
             Log::warning('notification.broadcast_failed', [
+                'user_id' => $user->id,
+                'type' => $type,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        try {
+            $fcmData = $data;
+
+            if (!array_key_exists('notification_id', $fcmData)) {
+                $fcmData['notification_id'] = (string) $notification->id;
+            }
+
+            SendFcmNotification::dispatch($user->id, $type, $title, $body, $fcmData);
+        } catch (\Throwable $e) {
+            Log::warning('notification.fcm_dispatch_failed', [
                 'user_id' => $user->id,
                 'type' => $type,
                 'error' => $e->getMessage(),
