@@ -77,7 +77,8 @@ class CarwashService
         try {
             DB::beginTransaction();
 
-            $carWasher = CarWasher::find($data['car_washer_id']);
+            // قفل صف المغسلة يُسلسل كل محاولات الحجز لنفس المغسلة، فيمنع حجزين لنفس الموعد تحت التزامن
+            $carWasher = CarWasher::where('id', $data['car_washer_id'])->lockForUpdate()->first();
 
             if (!$carWasher) {
                 throw new NotFoundHttpException('المغسلة غير موجودة');
@@ -116,6 +117,21 @@ class CarwashService
                 ]);
             }
 
+            $scheduledAt = \Carbon\Carbon::parse($data['scheduled_at'])->format('Y-m-d H:i:s');
+
+            // يمنع حجزين نشطين لنفس المغسلة في نفس الموعد بالضبط؛ الحجوزات الملغاة لا تُحتسب
+            $slotTaken = CarwashBooking::where('car_washer_id', $carWasher->id)
+                ->where('scheduled_at', $scheduledAt)
+                ->where('status', '!=', CarwashBooking::STATUS_CANCELLED)
+                ->exists();
+
+            if ($slotTaken) {
+                throw ValidationException::withMessages([
+                    'scheduled_at' => ['هذا الموعد محجوز بالفعل لدى هذه المغسلة'],
+                ]);
+            }
+
+            $data['scheduled_at'] = $scheduledAt;
             $data['price'] = $servicePrices[$data['service_type']];
             $data['status'] = CarwashBooking::STATUS_PENDING;
 
@@ -216,6 +232,10 @@ class CarwashService
 
         if ($carWasher->status !== 'approved') {
             throw new \Exception('حسابك كمغسلة لم يتم اعتماده بعد من الإدارة');
+        }
+
+        if (!$carWasher->is_available) {
+            throw new \Exception('يجب تفعيل حالة التوفر لقبول الطلبات');
         }
 
         $booking = DB::transaction(function () use ($carWasher, $bookingId) {

@@ -152,6 +152,12 @@ class CustomerShopService
                 $requiredQuantities[$item->product_id] = ($requiredQuantities[$item->product_id] ?? 0) + $item->quantity;
             }
 
+            // إعادة التحقق من حالة المتجر وقت الدفع نفسه، فقد تغيّرت منذ إضافة المنتج للسلة
+            $shop = Shop::find($shopId);
+            if (!$shop || !$shop->is_active || $shop->status !== 'approved') {
+                throw new \Exception('المتجر غير متاح حالياً لاستقبال الطلبات');
+            }
+
             foreach ($requiredQuantities as $productId => $quantity) {
                 if ($products->get($productId)->stock_quantity < $quantity) {
                     throw new \Exception('الكمية المطلوبة غير متوفرة');

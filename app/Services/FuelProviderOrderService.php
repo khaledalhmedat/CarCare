@@ -105,6 +105,10 @@ class FuelProviderOrderService
             throw new \Exception('حسابك كمزود وقود لم يتم اعتماده بعد من الإدارة');
         }
 
+        if (!$fuelProvider->is_available) {
+            throw new \Exception('يجب تفعيل حالة التوفر لقبول الطلبات');
+        }
+
         // Pre-acceptance checks: read-only, done before the row lock below so a
         // provider that's out of range or doesn't carry this fuel type never
         // mutates the order. Loaded outside the transaction on purpose — this
