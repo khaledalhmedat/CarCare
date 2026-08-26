@@ -7,6 +7,7 @@ use App\Models\SosRequest;
 use App\Models\Technician;
 use App\Repositories\Contracts\SosRepositoryInterface;
 use App\Events\NewSosRequest;
+use App\Events\SosCancelledByCustomer;
 use App\Helpers\HaversineTrait;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -171,6 +172,15 @@ class SosService
         if ($cancelled && $assignedTechnicianId) {
             $technician = User::find($assignedTechnicianId);
             if ($technician && $technician->id !== $user->id) {
+                try {
+                    broadcast(new SosCancelledByCustomer($request, $technician, $reason));
+                } catch (\Throwable $e) {
+                    Log::warning('sos.customer_cancel.broadcast_failed', [
+                        'sos_id' => $request->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+
                 $this->notifications->notifyUser(
                     $technician,
                     'sos_cancelled_by_customer',

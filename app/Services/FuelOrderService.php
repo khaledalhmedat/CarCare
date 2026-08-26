@@ -135,7 +135,12 @@ class FuelOrderService
         return $order->load(['vehicle']);
     }
 
-    protected function notifyProviders(FuelOrder $order, ?string $city, array $data): void
+    /**
+     * Also used to re-announce a reopened order (after a provider cancels) via
+     * reannounceOrder() below, so the same eligibility/targeting logic used for
+     * the initial emergency fan-out is reused rather than duplicated.
+     */
+    protected function notifyProviders(FuelOrder $order, ?string $city, array $data, ?int $excludeProviderId = null): void
     {
         try {
             $nearbyProviders = $this->getNearbyFuelProviders(
@@ -143,6 +148,12 @@ class FuelOrderService
                 $data['delivery_longitude'],
                 30
             );
+
+            if ($excludeProviderId !== null) {
+                $nearbyProviders = $nearbyProviders->reject(
+                    fn ($provider) => $provider->id === $excludeProviderId
+                )->values();
+            }
 
             $providersNotified = [];
 
@@ -162,6 +173,12 @@ class FuelOrderService
             }
 
             $cityProviders = $this->getFuelProvidersByCity($city);
+
+            if ($excludeProviderId !== null) {
+                $cityProviders = $cityProviders->reject(
+                    fn ($provider) => $provider->id === $excludeProviderId
+                )->values();
+            }
 
             if ($cityProviders->isNotEmpty()) {
                 foreach ($cityProviders as $provider) {
@@ -191,6 +208,25 @@ class FuelOrderService
         }
     }
 
+
+    /**
+     * Re-announces a reopened order (e.g. after a provider cancels an accepted
+     * order) to eligible providers, reusing the same discovery/broadcast/notify
+     * logic as the initial emergency fan-out. $excludeProviderId keeps the
+     * cancelling provider from being re-announced their own reopened order.
+     */
+    public function reannounceOrder(FuelOrder $order, ?int $excludeProviderId = null): void
+    {
+        $this->notifyProviders(
+            $order,
+            $order->city,
+            [
+                'delivery_latitude' => $order->delivery_latitude,
+                'delivery_longitude' => $order->delivery_longitude,
+            ],
+            $excludeProviderId
+        );
+    }
 
     protected function notifyEmergencyFuelRecipient(int $userId, FuelOrder $order): void
     {

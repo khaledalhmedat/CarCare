@@ -12,7 +12,6 @@ use App\Events\FuelOrderCancelled;
 use App\Events\FuelProviderLocationUpdated;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use App\Events\NewEmergencyFuelOrder;
 use App\Helpers\HaversineTrait;
 use App\Models\FuelOrderTrackingPoint;
 use App\Exceptions\ServiceAcceptanceException;
@@ -27,7 +26,8 @@ class FuelProviderOrderService
 
     public function __construct(
         protected FuelOrderRepositoryInterface $repository,
-        protected NotificationService $notifications
+        protected NotificationService $notifications,
+        protected FuelOrderService $fuelOrderService
     ) {}
 
     use HaversineTrait;
@@ -390,14 +390,16 @@ class FuelProviderOrderService
             'cancellation_reason' => $reason,
         ]);
 
+        $order = $order->fresh(['user', 'vehicle']);
+
         try {
             broadcast(new FuelOrderCancelled($order, $fuelProvider, $reason));
-            broadcast(new NewEmergencyFuelOrder($order, null, null));
         } catch (\Throwable $e) {
             Log::warning('fuel.provider_cancel.broadcast_failed', ['order_id' => $orderId, 'error' => $e->getMessage()]);
         }
 
-        $order = $order->fresh();
+        // يعيد إعلان الطلب لمزودي الوقود المؤهلين بنفس منطق البحث المستخدم عند الإنشاء، مع استبعاد المزود الذي ألغى
+        $this->fuelOrderService->reannounceOrder($order, $fuelProvider->id);
 
         $customer = $order->user;
         if ($customer && $customer->id !== $provider->id) {

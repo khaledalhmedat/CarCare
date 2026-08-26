@@ -10,6 +10,7 @@ use App\Models\ServiceJob;
 use App\Models\Rating;
 use App\Repositories\Contracts\MaintenanceRequestRepositoryInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class MaintenanceRequestService
@@ -117,6 +118,93 @@ class MaintenanceRequestService
     }
 
 
+    /**
+     * Reuses the same eligibility gate the maintenance workflow already enforces
+     * elsewhere (TechnicianMaintenanceService::getAvailableRequests/submitQuotation):
+     * an approved technician profile. No geo/city targeting exists for maintenance
+     * requests today, so every approved technician is eligible, same as today's polling.
+     */
+    private function notifyEligibleTechnicians(MaintenanceRequest $request, User $actor): void
+    {
+        try {
+            $technicianUserIds = Technician::where('status', 'approved')
+                ->pluck('user_id')
+                ->unique();
+
+            foreach ($technicianUserIds as $technicianUserId) {
+                if (!$technicianUserId || $technicianUserId === $actor->id) {
+                    continue;
+                }
+
+                $technicianUser = User::find($technicianUserId);
+                if (!$technicianUser) {
+                    continue;
+                }
+
+                $this->notifications->notifyUser(
+                    $technicianUser,
+                    'new_maintenance_request',
+                    'طلب صيانة جديد',
+                    'يوجد طلب صيانة جديد متاح لتقديم عرض سعر',
+                    [
+                        'entity_type' => 'maintenance_request',
+                        'entity_id' => $request->id,
+                        'action' => 'open_details',
+                        'status' => 'pending',
+                    ]
+                );
+            }
+        } catch (\Throwable $e) {
+            Log::warning('maintenance.notify_technicians_failed', [
+                'request_id' => $request->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function notifyQuotedTechniciansOfCancellation(MaintenanceRequest $request, $technicianUserIds, User $actor, string $reason): void
+    {
+        try {
+            $notifiedTechnicianIds = [];
+
+            foreach ($technicianUserIds as $technicianUserId) {
+                if (!$technicianUserId || $technicianUserId === $actor->id) {
+                    continue;
+                }
+
+                if (in_array($technicianUserId, $notifiedTechnicianIds, true)) {
+                    continue;
+                }
+
+                $technicianUser = User::find($technicianUserId);
+                if (!$technicianUser) {
+                    continue;
+                }
+
+                $notifiedTechnicianIds[] = $technicianUserId;
+
+                $this->notifications->notifyUser(
+                    $technicianUser,
+                    'maintenance_request_cancelled',
+                    'تم إلغاء طلب الصيانة',
+                    'قام العميل بإلغاء طلب الصيانة الذي قدمت عرض سعر عليه',
+                    [
+                        'entity_type' => 'maintenance_request',
+                        'entity_id' => $request->id,
+                        'action' => 'open_details',
+                        'status' => 'cancelled',
+                        'reason' => $reason,
+                    ]
+                );
+            }
+        } catch (\Throwable $e) {
+            Log::warning('maintenance.notify_cancellation_failed', [
+                'request_id' => $request->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
     public function getUserRequests(User $user, ?string $status = null)
     {
         return $this->requestRepository->getUserRequests($user, $status);
@@ -159,11 +247,16 @@ class MaintenanceRequestService
             }
 
             DB::commit();
-            return $request->load(['vehicle', 'photos']);
         } catch (\Exception $e) {
             DB::rollBack();
             throw $e;
         }
+
+        $request = $request->load(['vehicle', 'photos']);
+
+        $this->notifyEligibleTechnicians($request, $user);
+
+        return $request;
     }
 
     public function updateRequest(int $id, User $user, array $data): MaintenanceRequest
@@ -187,7 +280,18 @@ class MaintenanceRequestService
             throw new \Exception('لا يمكن إلغاء الطلب في هذه المرحلة');
         }
 
-        return $this->requestRepository->cancel($request, $reason);
+        $quotedTechnicianUserIds = Quotation::where('maintenance_request_id', $request->id)
+            ->where('status', 'pending')
+            ->pluck('technician_id')
+            ->unique();
+
+        $cancelled = $this->requestRepository->cancel($request, $reason);
+
+        if ($cancelled) {
+            $this->notifyQuotedTechniciansOfCancellation($request, $quotedTechnicianUserIds, $user, $reason);
+        }
+
+        return $cancelled;
     }
 
     public function deleteRequest(int $id, User $user): bool
