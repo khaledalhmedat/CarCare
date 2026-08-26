@@ -24,13 +24,9 @@ class TechnicianMaintenanceRequestResource extends JsonResource
                 'phone' => $this->user->phone,
             ] : null,
 
-            'vehicle' => $this->vehicle ? [
-                'id' => $this->vehicle->id,
-                'brand' => $this->vehicle->brand,
-                'model' => $this->vehicle->model,
-                'year' => $this->vehicle->year,
-                'plate_number' => $this->vehicle->plate_number,
-            ] : null,
+            'vehicle' => $this->vehicle
+                ? new VehicleResource($this->vehicle)
+                : null,
 
             'images' => $this->whenLoaded('photos', function () {
                 return $this->photos->map(function ($photo) {
