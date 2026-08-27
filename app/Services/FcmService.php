@@ -42,6 +42,9 @@ class FcmService
                     'body' => $body,
                 ],
                 'data' => $this->normalizeData($data),
+                'android' => [
+                    'notification' => $this->resolveAndroidNotificationChannel($data['type'] ?? null),
+                ],
             ],
         ];
 
@@ -95,6 +98,38 @@ class FcmService
 
             return $token['access_token'];
         });
+    }
+
+    /**
+     * Maps a notification `type` to the matching Flutter-side channel/sound/icon,
+     * so the custom sound also plays for background/terminated notifications
+     * (foreground notifications are built entirely client-side and unaffected).
+     */
+    private function resolveAndroidNotificationChannel(?string $type): array
+    {
+        $type ??= '';
+
+        if ($type === 'new_sos_request' || str_starts_with($type, 'sos_')) {
+            return ['channel_id' => 'car_care_sos', 'sound' => 'carcare_sos', 'icon' => 'ic_notification_sos'];
+        }
+
+        if (str_starts_with($type, 'carwash_')) {
+            return ['channel_id' => 'car_care_wash', 'sound' => 'carcare_wash', 'icon' => 'ic_notification_wash'];
+        }
+
+        if ($type === 'new_emergency_fuel_order' || str_starts_with($type, 'fuel_')) {
+            return ['channel_id' => 'car_care_fuel', 'sound' => 'carcare_fuel', 'icon' => 'ic_notification_fuel'];
+        }
+
+        if (str_starts_with($type, 'maintenance_')) {
+            return ['channel_id' => 'car_care_maintenance', 'sound' => 'carcare_maintenance', 'icon' => 'ic_notification_maintenance'];
+        }
+
+        if (str_starts_with($type, 'spare_parts_')) {
+            return ['channel_id' => 'car_care_spare_parts', 'sound' => 'carcare_spare_parts', 'icon' => 'ic_notification_spare_parts'];
+        }
+
+        return ['channel_id' => 'car_care_general', 'sound' => 'carcare_general', 'icon' => 'ic_notification_general'];
     }
 
     private function normalizeData(array $data): array
