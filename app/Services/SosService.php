@@ -5,10 +5,12 @@ namespace App\Services;
 use App\Models\User;
 use App\Models\SosRequest;
 use App\Models\Technician;
+use App\Models\DispatchNotificationRecipient;
 use App\Repositories\Contracts\SosRepositoryInterface;
 use App\Events\NewSosRequest;
 use App\Events\SosCancelledByCustomer;
 use App\Helpers\HaversineTrait;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -19,7 +21,8 @@ class SosService
 
     public function __construct(
         protected SosRepositoryInterface $repository,
-        protected NotificationService $notifications
+        protected NotificationService $notifications,
+        protected RadiusDispatchService $radiusDispatch
     ) {}
 
 
@@ -42,65 +45,113 @@ class SosService
             ]);
         });
 
-        $this->notifyTechnicians($sosRequest, $data);
+        $this->radiusDispatch->advance(
+            $sosRequest,
+            'sos',
+            'technician',
+            RadiusDispatchService::INITIAL_RADIUS_KM,
+            fn (int $radius) => $this->getNearbyTechnicians($sosRequest->lat, $sosRequest->lng, $radius),
+            fn (Collection $new) => $this->notifyTechnicianBatch($sosRequest, $new)
+        );
 
         return $sosRequest->load(['vehicle']);
     }
 
-    protected function notifyTechnicians(SosRequest $sosRequest, array $data): void
+    public function expandDispatchRadius(int $sosId, int $expectedRadiusKm): void
     {
-        try {
-            $nearbyTechnicians = $this->getNearbyTechnicians($data['lat'], $data['lng'], 30);
-
-            if ($nearbyTechnicians->isNotEmpty()) {
-                foreach ($nearbyTechnicians as $technician) {
-                    broadcast(new NewSosRequest($sosRequest, $technician, $technician->distance));
-                    $this->notifySosRecipient($technician->user_id, $sosRequest);
-                }
-
-                Log::info(' SOS: Notified ' . $nearbyTechnicians->count() . ' technicians by coordinates', [
-                    'sos_id' => $sosRequest->id,
-                    'technicians' => $nearbyTechnicians->pluck('id')->toArray()
-                ]);
-
+        DB::transaction(function () use ($sosId, $expectedRadiusKm) {
+            $sosRequest = SosRequest::whereKey($sosId)->lockForUpdate()->first();
+            if (!$sosRequest) {
+                return;
+            }
+            if ($sosRequest->status !== 'open') {
+                return;
+            }
+            if ((int) $sosRequest->current_radius_km !== $expectedRadiusKm) {
                 return;
             }
 
-            $city = $data['city'] ?? null;
+            $this->radiusDispatch->advance(
+                $sosRequest,
+                'sos',
+                'technician',
+                $expectedRadiusKm + RadiusDispatchService::RADIUS_STEP_KM,
+                fn (int $radius) => $this->getNearbyTechnicians($sosRequest->lat, $sosRequest->lng, $radius),
+                fn (Collection $new) => $this->notifyTechnicianBatch($sosRequest, $new)
+            );
+        });
+    }
 
-            if (!$city) {
-                Log::warning('❌ SOS: No city provided and no nearby technicians', [
-                    'sos_id' => $sosRequest->id
-                ]);
-
+    public function recheckMaxRadius(int $sosId): void
+    {
+        DB::transaction(function () use ($sosId) {
+            $sosRequest = SosRequest::whereKey($sosId)->lockForUpdate()->first();
+            if (!$sosRequest) {
+                return;
+            }
+            if ($sosRequest->status !== 'open') {
+                return;
+            }
+            $max = $this->radiusDispatch->maxRadiusKm();
+            if ((int) $sosRequest->current_radius_km !== $max) {
                 return;
             }
 
-            $cityTechnicians = Technician::where('is_available', true)
-                ->where('status', 'approved')
-                ->where('city', $city)
-                ->get();
+            $this->radiusDispatch->advance(
+                $sosRequest,
+                'sos',
+                'technician',
+                $max,
+                fn (int $radius) => $this->getNearbyTechnicians($sosRequest->lat, $sosRequest->lng, $radius),
+                fn (Collection $new) => $this->notifyTechnicianBatch($sosRequest, $new)
+            );
+        });
+    }
 
-            if ($cityTechnicians->isNotEmpty()) {
-                foreach ($cityTechnicians as $technician) {
-                    broadcast(new NewSosRequest($sosRequest, $technician, null));
-                    $this->notifySosRecipient($technician->user_id, $sosRequest);
-                }
+    public function reevaluateDispatch(int $sosId): void
+    {
+        DB::transaction(function () use ($sosId) {
+            $sosRequest = SosRequest::whereKey($sosId)->lockForUpdate()->first();
+            if (!$sosRequest) {
+                return;
+            }
+            if ($sosRequest->status !== 'open') {
+                return;
+            }
 
-                Log::info(' SOS: Notified ' . $cityTechnicians->count() . ' technicians in city: ' . $city, [
+            $start = $sosRequest->current_radius_km ?? RadiusDispatchService::INITIAL_RADIUS_KM;
+
+            $this->radiusDispatch->advance(
+                $sosRequest,
+                'sos',
+                'technician',
+                $start,
+                fn (int $radius) => $this->getNearbyTechnicians($sosRequest->lat, $sosRequest->lng, $radius),
+                fn (Collection $new) => $this->notifyTechnicianBatch($sosRequest, $new)
+            );
+        });
+    }
+
+    private function notifyTechnicianBatch(SosRequest $sosRequest, Collection $technicians): void
+    {
+        foreach ($technicians as $technician) {
+            try {
+                broadcast(new NewSosRequest($sosRequest, $technician, $technician->distance));
+                $this->notifySosRecipient($technician->user_id, $sosRequest);
+                DispatchNotificationRecipient::insertOrIgnore([[
+                    'service_type' => 'sos',
+                    'request_id' => $sosRequest->id,
+                    'recipient_type' => 'technician',
+                    'recipient_id' => $technician->id,
+                    'notified_at' => now(),
+                ]]);
+            } catch (\Throwable $e) {
+                Log::warning('sos.dispatch.notify_recipient_failed', [
                     'sos_id' => $sosRequest->id,
-                    'technicians' => $cityTechnicians->pluck('id')->toArray()
-                ]);
-            } else {
-                Log::warning('❌ SOS: No technicians found in city: ' . $city, [
-                    'sos_id' => $sosRequest->id
+                    'technician_id' => $technician->id,
+                    'error' => $e->getMessage(),
                 ]);
             }
-        } catch (\Throwable $e) {
-            Log::warning('sos.notify_failed', [
-                'sos_id' => $sosRequest->id,
-                'error' => $e->getMessage(),
-            ]);
         }
     }
 

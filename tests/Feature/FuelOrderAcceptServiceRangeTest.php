@@ -48,12 +48,12 @@ class FuelOrderAcceptServiceRangeTest extends TestCase
             'year' => 2020, 'plate_number' => 'FR-' . uniqid(),
         ]);
 
-        return FuelOrder::create([
+        return FuelOrder::create(array_merge([
             'user_id' => $customer->id, 'vehicle_id' => $vehicle->id,
             'fuel_type' => $fuelType, 'amount' => 20, 'delivery_address' => 'دمشق',
             'delivery_latitude' => $lat, 'delivery_longitude' => $lng,
             'status' => 'pending',
-        ]);
+        ], $this->eligibleRadiusState()));
     }
 
     public function test_provider_within_30km_and_supported_fuel_type_can_accept(): void
@@ -79,8 +79,8 @@ class FuelOrderAcceptServiceRangeTest extends TestCase
             ->assertStatus(422)
             ->assertJson(['success' => false, 'code' => 'OUT_OF_SERVICE_RANGE']);
 
-        $response->assertJsonPath('data.max_distance_km', 30);
-        $this->assertGreaterThan(30, $response->json('data.distance_km'));
+        $response->assertJsonPath('data.max_distance_km', 70);
+        $this->assertGreaterThan(70, $response->json('data.distance_km'));
 
         $fresh = $order->fresh();
         $this->assertEquals('pending', $fresh->status);

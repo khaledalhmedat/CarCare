@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\User;
 use App\Models\SosRequest;
 use App\Models\Technician;
+use App\Models\DispatchNotificationRecipient;
 use App\Repositories\Contracts\SosRepositoryInterface;
 use App\Events\SosRequestAccepted;
 use App\Events\SosRequestStatusUpdated;
@@ -16,12 +17,10 @@ use Illuminate\Support\Facades\Log;
 
 class TechnicianSosService
 {
-    // Kept in sync with the 30km radius used by getAvailableRequests() below.
-    private const MAX_SERVICE_DISTANCE_KM = 30;
-
     public function __construct(
         protected SosRepositoryInterface $repository,
-        protected NotificationService $notifications
+        protected NotificationService $notifications,
+        protected SosService $sosService
     ) {}
 
 
@@ -45,17 +44,14 @@ class TechnicianSosService
     public function getAvailableRequests(?float $technicianLat = null, ?float $technicianLng = null, ?string $technicianCity = null)
     {
         $allRequests = SosRequest::where('status', 'open')
+            ->whereNotNull('current_radius_km')
             ->with(['user', 'vehicle'])
             ->latest()
             ->get();
 
         $finalRequests = collect();
-        $addedIds = collect();
 
         if ($technicianLat && $technicianLng) {
-            // Technician location is known: distance is the only filter. City is
-            // intentionally NOT used as an alternate match here anymore, since a
-            // same-city match can still be well beyond MAX_SERVICE_DISTANCE_KM.
             foreach ($allRequests as $request) {
                 $distance = $this->calculateDistance(
                     $technicianLat,
@@ -64,42 +60,12 @@ class TechnicianSosService
                     $request->lng
                 );
 
-                if ($distance <= self::MAX_SERVICE_DISTANCE_KM) {
+                if ($distance <= $request->current_radius_km) {
                     $request->distance = round($distance, 2);
                     $finalRequests->push($request);
-                    $addedIds->push($request->id);
                 }
             }
-
-            Log::info(' Nearby requests (within ' . self::MAX_SERVICE_DISTANCE_KM . 'km):', [
-                'count' => $finalRequests->count(),
-                'ids' => $finalRequests->pluck('id')->toArray()
-            ]);
-        } elseif ($technicianCity) {
-            // Fallback only: technician has no coordinates yet, so distance can't be
-            // computed at all. City is the best available signal in that case.
-            foreach ($allRequests as $request) {
-                if ($request->city === $technicianCity && !$addedIds->contains($request->id)) {
-                    $request->distance = null;
-                    $finalRequests->push($request);
-                    $addedIds->push($request->id);
-                }
-            }
-
-            Log::info(' Same city requests (technician location unknown, no distance filter possible):', [
-                'technician_city' => $technicianCity,
-                'added_count' => $finalRequests->count(),
-                'new_ids' => $finalRequests->pluck('id')->toArray()
-            ]);
         }
-
-        Log::info(' FINAL RESULTS:', [
-            'total_final_requests' => $finalRequests->count(),
-            'all_ids' => $finalRequests->pluck('id')->toArray(),
-            'distances' => $finalRequests->map(function ($r) {
-                return ['id' => $r->id, 'distance' => $r->distance ?? 'null (same city only)'];
-            })->toArray()
-        ]);
 
         $page = request()->get('page', 1);
         $perPage = 15;
@@ -187,10 +153,6 @@ class TechnicianSosService
         return $sosRequest->fresh(['user', 'vehicle']);
     }
 
-    /**
-     * Mirrors the distance rule already enforced in getAvailableRequests() above,
-     * but as a hard gate on acceptance instead of a listing filter.
-     */
     private function assertWithinServiceRange(Technician $technicianProfile, SosRequest $sosRequest): void
     {
         if (!$technicianProfile->latitude || !$technicianProfile->longitude) {
@@ -200,13 +162,14 @@ class TechnicianSosService
             );
         }
 
-        // lat/lng are NOT NULL on sos_requests, but guard defensively anyway.
         if (!$sosRequest->lat || !$sosRequest->lng) {
             throw new ServiceAcceptanceException(
                 'تعذر التحقق من نطاق الخدمة لأن موقع الطلب غير محدد.',
                 'REQUEST_LOCATION_REQUIRED'
             );
         }
+
+        $currentRadius = (int) ($sosRequest->current_radius_km ?? 0);
 
         $distance = $this->calculateDistance(
             $technicianProfile->latitude,
@@ -215,12 +178,12 @@ class TechnicianSosService
             $sosRequest->lng
         );
 
-        if ($distance > self::MAX_SERVICE_DISTANCE_KM) {
+        if ($currentRadius === 0 || $distance > $currentRadius) {
             throw new ServiceAcceptanceException(
-                'الطلب خارج نطاق التغطية. لا يمكن قبول الطلبات التي تبعد أكثر من 30 كم عن موقعك.',
+                'الطلب خارج نطاق التغطية الحالي. سيتم توسيع النطاق تلقائيًا إذا لم يُقبل الطلب.',
                 'OUT_OF_SERVICE_RANGE',
                 [
-                    'max_distance_km' => self::MAX_SERVICE_DISTANCE_KM,
+                    'max_distance_km' => $currentRadius,
                     'distance_km' => round($distance, 2),
                 ]
             );
@@ -331,6 +294,19 @@ class TechnicianSosService
                 'error' => $e->getMessage(),
             ]);
         }
+
+        $technicianProfile = $technician->technician;
+        if ($technicianProfile) {
+            DispatchNotificationRecipient::insertOrIgnore([[
+                'service_type' => 'sos',
+                'request_id' => $sosRequest->id,
+                'recipient_type' => 'technician',
+                'recipient_id' => $technicianProfile->id,
+                'notified_at' => now(),
+            ]]);
+        }
+
+        $this->sosService->reevaluateDispatch($sosRequest->id);
 
         $customer = $sosRequest->user;
         if ($customer && $customer->id !== $technician->id) {

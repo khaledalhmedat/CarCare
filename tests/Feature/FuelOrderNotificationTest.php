@@ -13,6 +13,7 @@ use Illuminate\Contracts\Broadcasting\Broadcaster;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\Broadcast;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\CreatesTestData;
 use Tests\TestCase;
@@ -21,6 +22,12 @@ class FuelOrderNotificationTest extends TestCase
 {
     use RefreshDatabase;
     use CreatesTestData;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Queue::fake([\App\Jobs\ExpandDispatchRadius::class, \App\Jobs\MaxRadiusRecheckJob::class]);
+    }
 
     private function makeApprovedProvider(): User
     {
@@ -48,12 +55,12 @@ class FuelOrderNotificationTest extends TestCase
 
     private function makePendingOrder($customer, $vehicle): FuelOrder
     {
-        return FuelOrder::create([
+        return FuelOrder::create(array_merge([
             'user_id' => $customer->id, 'vehicle_id' => $vehicle->id,
             'fuel_type' => '95', 'amount' => 20, 'delivery_address' => 'دمشق',
             'delivery_latitude' => 33.5460, 'delivery_longitude' => 36.3249,
             'status' => 'pending',
-        ]);
+        ], $this->eligibleRadiusState()));
     }
 
     private function makeOrderForProvider($customer, $vehicle, User $providerUser, string $status = 'accepted'): FuelOrder

@@ -21,9 +21,6 @@ use App\Exceptions\ServiceAcceptanceException;
 
 class FuelProviderOrderService
 {
-    // Kept in sync with the 30km radius used by getAvailableOrders() below.
-    private const MAX_SERVICE_DISTANCE_KM = 30;
-
     public function __construct(
         protected FuelOrderRepositoryInterface $repository,
         protected NotificationService $notifications,
@@ -49,7 +46,6 @@ class FuelProviderOrderService
             return $empty;
         }
 
-        $city = $provider->city;
         $lat = $provider->latitude;
         $lng = $provider->longitude;
 
@@ -58,32 +54,16 @@ class FuelProviderOrderService
             ->with(['user', 'vehicle'])
             ->latest();
 
-        if ($lat && $lng) {
-            $haversine = "(6371 * acos(cos(radians(?)) * cos(radians(delivery_latitude)) * cos(radians(delivery_longitude) - radians(?)) + sin(radians(?)) * sin(radians(delivery_latitude))))";
-
-            // الطلب يظهر إذا كان قريباً (إحداثيات موجودة ضمن MAX_SERVICE_DISTANCE_KM)
-            // أو إذا لم تُحدَّد إحداثياته أصلاً وكان في نفس مدينة المزود (لا يمكن حساب
-            // المسافة بدون إحداثيات). طلب له إحداثيات لكنه أبعد من الحد لا يُطابق بالمدينة
-            // بعد الآن — كان هذا هو الثغرة التي تُظهر طلبات أبعد من 30 كم في القائمة.
-            $query->where(function ($group) use ($lat, $lng, $city, $haversine) {
-                $group->where(function ($near) use ($lat, $lng, $haversine) {
-                    $near->whereNotNull('delivery_latitude')
-                        ->whereNotNull('delivery_longitude')
-                        ->whereRaw("{$haversine} <= ?", [$lat, $lng, $lat, self::MAX_SERVICE_DISTANCE_KM]);
-                });
-
-                if ($city) {
-                    $group->orWhere(function ($noCoords) use ($city) {
-                        $noCoords->where(function ($missing) {
-                            $missing->whereNull('delivery_latitude')
-                                ->orWhereNull('delivery_longitude');
-                        })->where('city', $city);
-                    });
-                }
-            });
-        } elseif ($city) {
-            $query->where('city', $city);
+        if (!$lat || !$lng) {
+            return $empty;
         }
+
+        $haversine = "(6371 * acos(cos(radians(?)) * cos(radians(delivery_latitude)) * cos(radians(delivery_longitude) - radians(?)) + sin(radians(?)) * sin(radians(delivery_latitude))))";
+
+        $query->whereNotNull('current_radius_km')
+            ->whereNotNull('delivery_latitude')
+            ->whereNotNull('delivery_longitude')
+            ->whereRaw("{$haversine} <= current_radius_km", [$lat, $lng, $lat]);
 
         return $query->paginate(15);
     }
@@ -185,10 +165,6 @@ class FuelProviderOrderService
         return $order;
     }
 
-    /**
-     * Mirrors the distance rule already enforced in getAvailableOrders() above,
-     * but as a hard gate on acceptance instead of a listing filter.
-     */
     private function assertWithinServiceRange(FuelProvider $fuelProvider, FuelOrder $order): void
     {
         if (!$fuelProvider->latitude || !$fuelProvider->longitude) {
@@ -205,6 +181,8 @@ class FuelProviderOrderService
             );
         }
 
+        $currentRadius = (int) ($order->current_radius_km ?? 0);
+
         $distance = $this->calculateDistance(
             (float) $fuelProvider->latitude,
             (float) $fuelProvider->longitude,
@@ -212,12 +190,12 @@ class FuelProviderOrderService
             (float) $order->delivery_longitude
         );
 
-        if ($distance > self::MAX_SERVICE_DISTANCE_KM) {
+        if ($currentRadius === 0 || $distance > $currentRadius) {
             throw new ServiceAcceptanceException(
-                'الطلب خارج نطاق التغطية. لا يمكن قبول الطلبات التي تبعد أكثر من 30 كم عن موقعك.',
+                'الطلب خارج نطاق التغطية الحالي. سيتم توسيع النطاق تلقائيًا إذا لم يُقبل الطلب.',
                 'OUT_OF_SERVICE_RANGE',
                 [
-                    'max_distance_km' => self::MAX_SERVICE_DISTANCE_KM,
+                    'max_distance_km' => $currentRadius,
                     'distance_km' => round($distance, 2),
                 ]
             );

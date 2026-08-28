@@ -34,4 +34,12 @@ trait CreatesTestData
     {
         return $this->makeUserWithRole('admin', $attributes);
     }
+
+    protected function eligibleRadiusState(): array
+    {
+        return [
+            'current_radius_km' => 70,
+            'radius_stage_started_at' => now(),
+        ];
+    }
 }

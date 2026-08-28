@@ -41,12 +41,12 @@ class FuelProviderAcceptAvailabilityTest extends TestCase
             'year' => 2020, 'plate_number' => 'FA-' . uniqid(),
         ]);
 
-        return FuelOrder::create([
+        return FuelOrder::create(array_merge([
             'user_id' => $customer->id, 'vehicle_id' => $vehicle->id,
             'fuel_type' => '95', 'amount' => 20, 'delivery_address' => 'دمشق',
             'delivery_latitude' => self::NEAR_LAT, 'delivery_longitude' => self::NEAR_LNG,
             'status' => 'pending',
-        ]);
+        ], $this->eligibleRadiusState()));
     }
 
     public function test_available_approved_provider_can_accept_pending_order(): void

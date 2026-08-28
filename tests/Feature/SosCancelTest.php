@@ -8,6 +8,7 @@ use App\Models\SosRequest;
 use App\Models\Technician;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\CreatesTestData;
 use Tests\TestCase;
@@ -16,6 +17,12 @@ class SosCancelTest extends TestCase
 {
     use RefreshDatabase;
     use CreatesTestData;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Queue::fake([\App\Jobs\ExpandDispatchRadius::class, \App\Jobs\MaxRadiusRecheckJob::class]);
+    }
 
     private function makeTechnician()
     {

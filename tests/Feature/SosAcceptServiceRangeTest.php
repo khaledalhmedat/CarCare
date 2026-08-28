@@ -48,10 +48,10 @@ class SosAcceptServiceRangeTest extends TestCase
             'year' => 2019, 'plate_number' => 'SR-' . uniqid(),
         ]);
 
-        return SosRequest::create([
+        return SosRequest::create(array_merge([
             'user_id' => $customer->id, 'vehicle_id' => $vehicle->id,
             'lat' => $lat, 'lng' => $lng, 'status' => 'open',
-        ]);
+        ], $this->eligibleRadiusState()));
     }
 
     public function test_technician_within_30km_can_accept(): void
@@ -78,8 +78,8 @@ class SosAcceptServiceRangeTest extends TestCase
             ->assertStatus(422)
             ->assertJson(['success' => false, 'code' => 'OUT_OF_SERVICE_RANGE']);
 
-        $response->assertJsonPath('data.max_distance_km', 30);
-        $this->assertGreaterThan(30, $response->json('data.distance_km'));
+        $response->assertJsonPath('data.max_distance_km', 70);
+        $this->assertGreaterThan(70, $response->json('data.distance_km'));
         $this->assertIsString($response->json('message'));
         $this->assertNotEmpty($response->json('message'));
 

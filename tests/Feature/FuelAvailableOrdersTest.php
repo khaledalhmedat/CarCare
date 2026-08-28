@@ -52,7 +52,7 @@ class FuelAvailableOrdersTest extends TestCase
             'amount' => 20,
             'status' => 'pending',
             'delivery_address' => 'دمشق',
-        ], $attributes));
+        ], $this->eligibleRadiusState(), $attributes));
     }
 
     private function availableIds(): array
@@ -72,14 +72,14 @@ class FuelAvailableOrdersTest extends TestCase
         $this->assertContains($order->id, $this->availableIds());
     }
 
-    public function test_pending_order_with_null_coords_but_same_city_appears(): void
+    public function test_pending_order_with_null_coords_does_not_appear(): void
     {
         $this->actAsApprovedProvider();
         $order = $this->makeOrder([
             'delivery_latitude' => null, 'delivery_longitude' => null, 'city' => 'دمشق',
         ]);
 
-        $this->assertContains($order->id, $this->availableIds());
+        $this->assertNotContains($order->id, $this->availableIds());
     }
 
     public function test_order_with_unsupported_fuel_type_does_not_appear(): void

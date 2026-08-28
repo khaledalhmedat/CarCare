@@ -19,7 +19,8 @@ class SosRequest extends Model
         'completed_at',
         'cancellation_reason',
         'city',
-
+        'current_radius_km',
+        'radius_stage_started_at',
     ];
 
     protected $casts = [
@@ -27,6 +28,7 @@ class SosRequest extends Model
         'lng' => 'decimal:7',
         'accepted_at' => 'datetime',
         'completed_at' => 'datetime',
+        'radius_stage_started_at' => 'datetime',
     ];
 
     public function user()

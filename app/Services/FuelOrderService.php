@@ -5,12 +5,14 @@ namespace App\Services;
 use App\Models\User;
 use App\Models\FuelOrder;
 use App\Models\FuelProvider;
+use App\Models\DispatchNotificationRecipient;
 use App\Repositories\Contracts\FuelOrderRepositoryInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Events\NewEmergencyFuelOrder;
 use Illuminate\Support\Facades\Http;
 use App\Helpers\HaversineTrait;
+use Illuminate\Support\Collection;
 
 
 
@@ -19,7 +21,8 @@ class FuelOrderService
 {
     public function __construct(
         protected FuelOrderRepositoryInterface $repository,
-        protected NotificationService $notifications
+        protected NotificationService $notifications,
+        protected RadiusDispatchService $radiusDispatch
     ) {}
 
     use HaversineTrait;
@@ -130,102 +133,138 @@ class FuelOrderService
             ]);
         });
 
-        $this->notifyProviders($order, $city, $data);
+        $this->radiusDispatch->advance(
+            $order,
+            'fuel',
+            'fuel_provider',
+            RadiusDispatchService::INITIAL_RADIUS_KM,
+            fn (int $radius) => $this->getNearbyFuelProviders($order->delivery_latitude, $order->delivery_longitude, $radius),
+            fn (Collection $new) => $this->notifyProviderBatch($order, $new)
+        );
 
         return $order->load(['vehicle']);
     }
 
-    /**
-     * Also used to re-announce a reopened order (after a provider cancels) via
-     * reannounceOrder() below, so the same eligibility/targeting logic used for
-     * the initial emergency fan-out is reused rather than duplicated.
-     */
-    protected function notifyProviders(FuelOrder $order, ?string $city, array $data, ?int $excludeProviderId = null): void
+    public function expandDispatchRadius(int $orderId, int $expectedRadiusKm): void
     {
-        try {
-            $nearbyProviders = $this->getNearbyFuelProviders(
-                $data['delivery_latitude'],
-                $data['delivery_longitude'],
-                30
-            );
-
-            if ($excludeProviderId !== null) {
-                $nearbyProviders = $nearbyProviders->reject(
-                    fn ($provider) => $provider->id === $excludeProviderId
-                )->values();
+        DB::transaction(function () use ($orderId, $expectedRadiusKm) {
+            $order = FuelOrder::whereKey($orderId)->lockForUpdate()->first();
+            if (!$order) {
+                return;
             }
-
-            $providersNotified = [];
-
-            if ($nearbyProviders->isNotEmpty()) {
-                foreach ($nearbyProviders as $provider) {
-                    broadcast(new NewEmergencyFuelOrder($order, $provider, $provider->distance));
-                    $this->notifyEmergencyFuelRecipient($provider->user_id, $order);
-                    $providersNotified[] = $provider->id;
-                }
-
-                Log::info('Fuel order: ' . $nearbyProviders->count() . ' nearby providers notified', [
-                    'order_id' => $order->id,
-                    'providers' => $providersNotified
-                ]);
-
+            if ($order->status !== 'pending') {
+                return;
+            }
+            if ((int) $order->current_radius_km !== $expectedRadiusKm) {
+                return;
+            }
+            if (!$order->delivery_latitude || !$order->delivery_longitude) {
                 return;
             }
 
-            $cityProviders = $this->getFuelProvidersByCity($city);
-
-            if ($excludeProviderId !== null) {
-                $cityProviders = $cityProviders->reject(
-                    fn ($provider) => $provider->id === $excludeProviderId
-                )->values();
-            }
-
-            if ($cityProviders->isNotEmpty()) {
-                foreach ($cityProviders as $provider) {
-                    broadcast(new NewEmergencyFuelOrder($order, $provider, null));
-                    $this->notifyEmergencyFuelRecipient($provider->user_id, $order);
-                    $providersNotified[] = $provider->id;
-                }
-
-                Log::info('Fuel order: ' . $cityProviders->count() . ' city providers notified', [
-                    'order_id' => $order->id,
-                    'city' => $city,
-                    'providers' => $providersNotified
-                ]);
-            } else {
-                Log::warning('Fuel order: no providers found (neither nearby nor in same city)', [
-                    'order_id' => $order->id,
-                    'city' => $city,
-                    'lat' => $data['delivery_latitude'],
-                    'lng' => $data['delivery_longitude']
-                ]);
-            }
-        } catch (\Throwable $e) {
-            Log::warning('fuel.emergency_order.broadcast_failed', [
-                'fuel_order_id' => $order->id ?? null,
-                'message' => $e->getMessage(),
-            ]);
-        }
+            $this->radiusDispatch->advance(
+                $order,
+                'fuel',
+                'fuel_provider',
+                $expectedRadiusKm + RadiusDispatchService::RADIUS_STEP_KM,
+                fn (int $radius) => $this->getNearbyFuelProviders($order->delivery_latitude, $order->delivery_longitude, $radius),
+                fn (Collection $new) => $this->notifyProviderBatch($order, $new)
+            );
+        });
     }
 
+    public function recheckMaxRadius(int $orderId): void
+    {
+        DB::transaction(function () use ($orderId) {
+            $order = FuelOrder::whereKey($orderId)->lockForUpdate()->first();
+            if (!$order) {
+                return;
+            }
+            if ($order->status !== 'pending') {
+                return;
+            }
+            $max = $this->radiusDispatch->maxRadiusKm();
+            if ((int) $order->current_radius_km !== $max) {
+                return;
+            }
+            if (!$order->delivery_latitude || !$order->delivery_longitude) {
+                return;
+            }
 
-    /**
-     * Re-announces a reopened order (e.g. after a provider cancels an accepted
-     * order) to eligible providers, reusing the same discovery/broadcast/notify
-     * logic as the initial emergency fan-out. $excludeProviderId keeps the
-     * cancelling provider from being re-announced their own reopened order.
-     */
+            $this->radiusDispatch->advance(
+                $order,
+                'fuel',
+                'fuel_provider',
+                $max,
+                fn (int $radius) => $this->getNearbyFuelProviders($order->delivery_latitude, $order->delivery_longitude, $radius),
+                fn (Collection $new) => $this->notifyProviderBatch($order, $new)
+            );
+        });
+    }
+
+    public function reevaluateDispatch(int $orderId): void
+    {
+        DB::transaction(function () use ($orderId) {
+            $order = FuelOrder::whereKey($orderId)->lockForUpdate()->first();
+            if (!$order) {
+                return;
+            }
+            if ($order->status !== 'pending') {
+                return;
+            }
+            if (!$order->delivery_latitude || !$order->delivery_longitude) {
+                return;
+            }
+
+            $start = $order->current_radius_km ?? RadiusDispatchService::INITIAL_RADIUS_KM;
+
+            $this->radiusDispatch->advance(
+                $order,
+                'fuel',
+                'fuel_provider',
+                $start,
+                fn (int $radius) => $this->getNearbyFuelProviders($order->delivery_latitude, $order->delivery_longitude, $radius),
+                fn (Collection $new) => $this->notifyProviderBatch($order, $new)
+            );
+        });
+    }
+
     public function reannounceOrder(FuelOrder $order, ?int $excludeProviderId = null): void
     {
-        $this->notifyProviders(
-            $order,
-            $order->city,
-            [
-                'delivery_latitude' => $order->delivery_latitude,
-                'delivery_longitude' => $order->delivery_longitude,
-            ],
-            $excludeProviderId
-        );
+        if ($excludeProviderId !== null) {
+            DispatchNotificationRecipient::insertOrIgnore([[
+                'service_type' => 'fuel',
+                'request_id' => $order->id,
+                'recipient_type' => 'fuel_provider',
+                'recipient_id' => $excludeProviderId,
+                'notified_at' => now(),
+            ]]);
+        }
+
+        $this->reevaluateDispatch($order->id);
+    }
+
+    private function notifyProviderBatch(FuelOrder $order, Collection $providers): void
+    {
+        foreach ($providers as $provider) {
+            try {
+                broadcast(new NewEmergencyFuelOrder($order, $provider, $provider->distance));
+                $this->notifyEmergencyFuelRecipient($provider->user_id, $order);
+                DispatchNotificationRecipient::insertOrIgnore([[
+                    'service_type' => 'fuel',
+                    'request_id' => $order->id,
+                    'recipient_type' => 'fuel_provider',
+                    'recipient_id' => $provider->id,
+                    'notified_at' => now(),
+                ]]);
+            } catch (\Throwable $e) {
+                Log::warning('fuel.dispatch.notify_recipient_failed', [
+                    'order_id' => $order->id,
+                    'provider_id' => $provider->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
     }
 
     protected function notifyEmergencyFuelRecipient(int $userId, FuelOrder $order): void
@@ -266,23 +305,6 @@ class FuelOrderService
                 return $provider;
             });
     }
-
-    protected function getFuelProvidersByCity(?string $city)
-    {
-        if (!$city) {
-            return collect();
-        }
-
-        return FuelProvider::where('is_available', true)
-            ->where('status', 'approved')
-            ->where('city', $city)
-            ->get()
-            ->map(function ($provider) {
-                $provider->distance = null;
-                return $provider;
-            });
-    }
-
 
     private function getCityFromCoordinates(float $lat, float $lng): ?string
     {

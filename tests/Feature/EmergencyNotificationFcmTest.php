@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ExpandDispatchRadius;
+use App\Jobs\MaxRadiusRecheckJob;
 use App\Jobs\SendFcmNotification;
 use App\Models\FuelOrder;
 use App\Models\FuelProvider;
@@ -13,6 +15,7 @@ use Illuminate\Contracts\Broadcasting\Broadcaster;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\CreatesTestData;
 use Tests\TestCase;
@@ -28,6 +31,7 @@ class EmergencyNotificationFcmTest extends TestCase
     {
         parent::setUp();
         self::$broadcastCaptures = [];
+        Queue::fake([ExpandDispatchRadius::class, MaxRadiusRecheckJob::class]);
     }
 
     private function useSpyBroadcaster(): void

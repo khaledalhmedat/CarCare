@@ -11,6 +11,7 @@ use App\Models\Vehicle;
 use Illuminate\Contracts\Broadcasting\Broadcaster;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Broadcast;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\CreatesTestData;
 use Tests\TestCase;
@@ -19,6 +20,12 @@ class SosNotificationTest extends TestCase
 {
     use RefreshDatabase;
     use CreatesTestData;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Queue::fake([\App\Jobs\ExpandDispatchRadius::class, \App\Jobs\MaxRadiusRecheckJob::class]);
+    }
 
     private function makeTechnician(): User
     {
@@ -40,10 +47,10 @@ class SosNotificationTest extends TestCase
             'year' => 2019, 'plate_number' => 'SN-' . uniqid(),
         ]);
 
-        $sos = SosRequest::create([
+        $sos = SosRequest::create(array_merge([
             'user_id' => $customer->id, 'vehicle_id' => $vehicle->id,
             'technician_id' => $techUser?->id, 'lat' => 33.54, 'lng' => 36.32, 'status' => $status,
-        ]);
+        ], $this->eligibleRadiusState()));
 
         return [$customer, $sos];
     }
