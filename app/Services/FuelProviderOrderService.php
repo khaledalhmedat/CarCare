@@ -61,17 +61,24 @@ class FuelProviderOrderService
         if ($lat && $lng) {
             $haversine = "(6371 * acos(cos(radians(?)) * cos(radians(delivery_latitude)) * cos(radians(delivery_longitude) - radians(?)) + sin(radians(?)) * sin(radians(delivery_latitude))))";
 
-            // الطلب يظهر إذا كان قريباً (إحداثيات موجودة ضمن 30 كم) أو في نفس مدينة المزود
-            // (الطلبات بدون إحداثيات لا تُستبعد بصمت، بل تُطابق بالمدينة)
+            // الطلب يظهر إذا كان قريباً (إحداثيات موجودة ضمن MAX_SERVICE_DISTANCE_KM)
+            // أو إذا لم تُحدَّد إحداثياته أصلاً وكان في نفس مدينة المزود (لا يمكن حساب
+            // المسافة بدون إحداثيات). طلب له إحداثيات لكنه أبعد من الحد لا يُطابق بالمدينة
+            // بعد الآن — كان هذا هو الثغرة التي تُظهر طلبات أبعد من 30 كم في القائمة.
             $query->where(function ($group) use ($lat, $lng, $city, $haversine) {
                 $group->where(function ($near) use ($lat, $lng, $haversine) {
                     $near->whereNotNull('delivery_latitude')
                         ->whereNotNull('delivery_longitude')
-                        ->whereRaw("{$haversine} <= 30", [$lat, $lng, $lat]);
+                        ->whereRaw("{$haversine} <= ?", [$lat, $lng, $lat, self::MAX_SERVICE_DISTANCE_KM]);
                 });
 
                 if ($city) {
-                    $group->orWhere('city', $city);
+                    $group->orWhere(function ($noCoords) use ($city) {
+                        $noCoords->where(function ($missing) {
+                            $missing->whereNull('delivery_latitude')
+                                ->orWhereNull('delivery_longitude');
+                        })->where('city', $city);
+                    });
                 }
             });
         } elseif ($city) {

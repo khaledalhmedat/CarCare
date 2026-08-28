@@ -53,6 +53,9 @@ class TechnicianSosService
         $addedIds = collect();
 
         if ($technicianLat && $technicianLng) {
+            // Technician location is known: distance is the only filter. City is
+            // intentionally NOT used as an alternate match here anymore, since a
+            // same-city match can still be well beyond MAX_SERVICE_DISTANCE_KM.
             foreach ($allRequests as $request) {
                 $distance = $this->calculateDistance(
                     $technicianLat,
@@ -61,20 +64,20 @@ class TechnicianSosService
                     $request->lng
                 );
 
-                if ($distance <= 30) {
+                if ($distance <= self::MAX_SERVICE_DISTANCE_KM) {
                     $request->distance = round($distance, 2);
                     $finalRequests->push($request);
                     $addedIds->push($request->id);
                 }
             }
 
-            Log::info(' Nearby requests (within 30km):', [
+            Log::info(' Nearby requests (within ' . self::MAX_SERVICE_DISTANCE_KM . 'km):', [
                 'count' => $finalRequests->count(),
                 'ids' => $finalRequests->pluck('id')->toArray()
             ]);
-        }
-
-        if ($technicianCity) {
+        } elseif ($technicianCity) {
+            // Fallback only: technician has no coordinates yet, so distance can't be
+            // computed at all. City is the best available signal in that case.
             foreach ($allRequests as $request) {
                 if ($request->city === $technicianCity && !$addedIds->contains($request->id)) {
                     $request->distance = null;
@@ -83,9 +86,9 @@ class TechnicianSosService
                 }
             }
 
-            Log::info(' Same city requests (all distances, no distance filter):', [
+            Log::info(' Same city requests (technician location unknown, no distance filter possible):', [
                 'technician_city' => $technicianCity,
-                'added_count' => $finalRequests->count() - ($finalRequests->count() - $addedIds->count()),
+                'added_count' => $finalRequests->count(),
                 'new_ids' => $finalRequests->pluck('id')->toArray()
             ]);
         }
