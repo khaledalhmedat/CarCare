@@ -20,7 +20,6 @@ class FuelOrderStatusUpdated implements ShouldBroadcast
         return [
             new Channel('fuel-order.' . $this->order->id),
             new Channel('user.' . $this->order->user_id),
-            new Channel('fuel-provider.' . $this->order->fuel_provider_id),
         ];
     }
 

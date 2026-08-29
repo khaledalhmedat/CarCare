@@ -11,7 +11,8 @@ use Illuminate\Validation\ValidationException;
 class AuthService
 {
     public function __construct(
-        protected AuthRepositoryInterface $authRepository
+        protected AuthRepositoryInterface $authRepository,
+        protected DeviceRegistrationService $deviceRegistrations
     ) {}
 
     public function register(array $data): array
@@ -55,10 +56,14 @@ class AuthService
         }
     }
 
-    public function logout($user): array
+    public function logout($user, ?string $fcmToken = null): array
     {
         try {
             $this->authRepository->logout($user);
+
+            if ($fcmToken) {
+                $this->deviceRegistrations->unregisterDevice($user, $fcmToken);
+            }
 
             return [
                 'success' => true,

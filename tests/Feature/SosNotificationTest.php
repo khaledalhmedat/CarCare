@@ -21,10 +21,43 @@ class SosNotificationTest extends TestCase
     use RefreshDatabase;
     use CreatesTestData;
 
+    public static array $broadcastCaptures = [];
+
     protected function setUp(): void
     {
         parent::setUp();
         Queue::fake([\App\Jobs\ExpandDispatchRadius::class, \App\Jobs\MaxRadiusRecheckJob::class]);
+        self::$broadcastCaptures = [];
+    }
+
+    private function useSpyBroadcaster(): void
+    {
+        Broadcast::extend('spy', function () {
+            return new class implements Broadcaster {
+                public function auth($request)
+                {
+                }
+
+                public function validAuthenticationResponse($request, $result)
+                {
+                    return $result;
+                }
+
+                public function broadcast(array $channels, $event, array $payload = [])
+                {
+                    SosNotificationTest::$broadcastCaptures[] = [
+                        'channels' => array_map(fn ($c) => (string) $c, $channels),
+                        'event' => $event,
+                        'payload' => $payload,
+                    ];
+                }
+            };
+        });
+
+        config([
+            'broadcasting.connections.spy' => ['driver' => 'spy'],
+            'broadcasting.default' => 'spy',
+        ]);
     }
 
     private function makeTechnician(): User
@@ -201,5 +234,26 @@ class SosNotificationTest extends TestCase
 
         $this->assertEquals('accepted', $sos->fresh()->status);
         $this->assertEquals(1, $customer->notifications()->count());
+    }
+
+    public function test_sos_status_updated_broadcast_does_not_include_acting_technician_channel(): void
+    {
+        $this->useSpyBroadcaster();
+        $tech = $this->makeTechnician();
+        [$customer, $sos] = $this->makeSos($tech, 'accepted');
+        Sanctum::actingAs($tech);
+
+        $this->patchJson("/api/technician/sos/requests/{$sos->id}/status", ['status' => 'in_progress'])
+            ->assertOk();
+
+        $statusUpdated = array_values(array_filter(
+            self::$broadcastCaptures,
+            fn ($c) => $c['event'] === 'sos-status-updated'
+        ));
+
+        $this->assertCount(1, $statusUpdated);
+        $this->assertContains('sos.' . $sos->id, $statusUpdated[0]['channels']);
+        $this->assertContains('user.' . $customer->id, $statusUpdated[0]['channels']);
+        $this->assertNotContains('technician.' . $tech->id, $statusUpdated[0]['channels']);
     }
 }

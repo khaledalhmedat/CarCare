@@ -20,7 +20,6 @@ class SosRequestStatusUpdated implements ShouldBroadcast
         return [
             new Channel('sos.' . $this->sosRequest->id),
             new Channel('user.' . $this->sosRequest->user_id),
-            new Channel('technician.' . $this->sosRequest->technician_id),
         ];
     }
 

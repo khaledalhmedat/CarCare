@@ -72,7 +72,7 @@ class AuthController extends Controller
     public function logout(Request $request): JsonResponse
     {
         try {
-            $result = $this->authService->logout($request->user());
+            $result = $this->authService->logout($request->user(), $request->input('fcm_token'));
 
             return response()->json([
                 'success' => $result['success'],

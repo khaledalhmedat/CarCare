@@ -21,6 +21,44 @@ class FuelOrderStatusTest extends TestCase
     use RefreshDatabase;
     use CreatesTestData;
 
+    public static array $broadcastCaptures = [];
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        self::$broadcastCaptures = [];
+    }
+
+    private function useSpyBroadcaster(): void
+    {
+        Broadcast::extend('spy', function () {
+            return new class implements Broadcaster {
+                public function auth($request)
+                {
+                }
+
+                public function validAuthenticationResponse($request, $result)
+                {
+                    return $result;
+                }
+
+                public function broadcast(array $channels, $event, array $payload = [])
+                {
+                    FuelOrderStatusTest::$broadcastCaptures[] = [
+                        'channels' => array_map(fn ($c) => (string) $c, $channels),
+                        'event' => $event,
+                        'payload' => $payload,
+                    ];
+                }
+            };
+        });
+
+        config([
+            'broadcasting.connections.spy' => ['driver' => 'spy'],
+            'broadcasting.default' => 'spy',
+        ]);
+    }
+
     private function makeApprovedProvider(): User
     {
         $providerUser = $this->makeUserWithRole('fuel-provider');
@@ -202,5 +240,28 @@ class FuelOrderStatusTest extends TestCase
             ->assertJson(['success' => true]);
 
         $this->assertEquals('in_progress', $order->fresh()->status);
+    }
+
+    public function test_status_updated_broadcast_does_not_include_acting_provider_channel(): void
+    {
+        $this->useSpyBroadcaster();
+        $provider = $this->makeApprovedProvider();
+        $order = $this->makeOrderForProvider($provider, 'accepted');
+        Sanctum::actingAs($provider);
+
+        $this->patchJson("/api/fuel_provider/orders/{$order->id}/status", ['status' => 'in_progress'])
+            ->assertOk();
+
+        $fuelProvider = FuelProvider::where('user_id', $provider->id)->first();
+
+        $statusUpdated = array_values(array_filter(
+            self::$broadcastCaptures,
+            fn ($c) => $c['event'] === 'status-updated'
+        ));
+
+        $this->assertCount(1, $statusUpdated);
+        $this->assertContains('fuel-order.' . $order->id, $statusUpdated[0]['channels']);
+        $this->assertContains('user.' . $order->fresh()->user_id, $statusUpdated[0]['channels']);
+        $this->assertNotContains('fuel-provider.' . $fuelProvider->id, $statusUpdated[0]['channels']);
     }
 }
